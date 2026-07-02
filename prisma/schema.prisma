@@ -1,0 +1,113 @@
+// Agentic Todoist — Prisma schema (TDD §3).
+// Prisma owns only the `public` schema. The Neon Auth (Better Auth) tables live
+// in the `neon_auth` schema and are managed by Neon — we do NOT model or FK to
+// them here. `userId`/`Profile.id` store `neon_auth.user.id` (a uuid) as an
+// app-layer reference; per-user isolation is enforced in the data layer (TDD §7).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // The connection URL is supplied by prisma.config.ts (DIRECT_URL for the CLI);
+  // the runtime client connects through the Neon adapter in src/lib/db.ts.
+}
+
+/// One row per authenticated user. `id` is the Neon Auth (Better Auth) user uuid.
+model Profile {
+  id         String   @id @db.Uuid /// = neon_auth.user.id
+  email      String
+  timezone   String   @default("UTC") /// IANA tz; single source of truth for "today" (TDD §5)
+  tzCaptured Boolean  @default(false) @map("tz_captured")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  projects      Project[]
+  tasks         Task[]
+  conversations Conversation[]
+  messages      Message[]
+
+  @@map("profiles")
+}
+
+model Project {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String
+  color     String?
+  isInbox   Boolean  @default(false) @map("is_inbox")
+  order     Float    @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  Profile @relation(fields: [userId], references: [id])
+  tasks Task[]
+
+  // Partial unique index "one Inbox per user" (WHERE is_inbox) is added via raw
+  // SQL in the migration — Prisma can't express a partial unique index here.
+  @@index([userId])
+  @@map("projects")
+}
+
+model Task {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  content     String
+  description String?
+  priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
+  dueDate     DateTime? @map("due_date") @db.Date
+  status      String    @default("active") /// 'active' | 'completed'
+  order       Float     @default(0)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6) /// maintained by Prisma, no DB trigger
+
+  user    Profile @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([userId, dueDate, status])
+  @@index([userId, projectId, order])
+  @@map("tasks")
+}
+
+/// v1 single thread per user (one row, @@unique([userId])). `title` reserved for v2.
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     Profile   @relation(fields: [userId], references: [id])
+  messages Message[]
+
+  @@unique([userId])
+  @@map("conversations")
+}
+
+/// Per-user, per-UTC-day model-request counter for the AI rate limit (TDD §7).
+model DailyUsage {
+  userId String @map("user_id") @db.Uuid
+  day    String /// 'YYYY-MM-DD' (UTC)
+  count  Int    @default(0)
+
+  @@id([userId, day])
+  @@map("daily_usage")
+}
+
+/// `id` is the AI SDK v7 UIMessage id (short alphanumeric string, NOT a uuid),
+/// stored verbatim so it is the upsert conflict target (TDD §3/§6.1).
+model Message {
+  id             String   @id
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  role           String /// 'user' | 'assistant' | 'system'
+  content        Json /// full UIMessage parts array
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         Profile      @relation(fields: [userId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
+}
