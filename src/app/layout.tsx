@@ -25,9 +25,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // suppressHydrationWarning: @neondatabase/auth-ui's bundled next-themes
+  // sets style/class on <html> before hydration, which React would otherwise
+  // report as a mismatch.
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
