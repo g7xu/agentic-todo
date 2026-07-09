@@ -25,12 +25,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // suppressHydrationWarning: the auth UI's bundled next-themes sets
+  // style/class on <html> before hydration; without this React logs a
+  // hydration-mismatch warning on every page load in dev.
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* suppressHydrationWarning: browser extensions (e.g. Grammarly) stamp
+          data-* attributes onto <body> before hydration. */}
+      <body suppressHydrationWarning className="min-h-full flex flex-col">
         <Providers>
           <AuthProvider>{children}</AuthProvider>
         </Providers>
