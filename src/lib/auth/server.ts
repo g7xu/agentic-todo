@@ -7,12 +7,5 @@ import { createNeonAuth } from "@neondatabase/auth/next/server";
  */
 export const auth = createNeonAuth({
   baseUrl: process.env.NEON_AUTH_BASE_URL!,
-  cookies: {
-    secret: process.env.NEON_AUTH_COOKIE_SECRET!,
-    // "lax" is required for OAuth: the redirect back from Google/Neon is a
-    // cross-site navigation, and the default "strict" stops the browser from
-    // sending the session_challange cookie, so the verifier exchange never
-    // runs and the user bounces back to /auth/sign-in.
-    sameSite: "lax",
-  },
+  cookies: { secret: process.env.NEON_AUTH_COOKIE_SECRET! },
 });
