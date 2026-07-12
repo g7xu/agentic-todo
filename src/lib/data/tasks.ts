@@ -9,6 +9,7 @@ type TaskRow = {
   description: string | null;
   priority: number;
   dueDate: Date | null;
+  timeUsed: number | null;
   status: string;
   order: number;
   projectId: string;
@@ -22,6 +23,7 @@ const SELECT = {
   description: true,
   priority: true,
   dueDate: true,
+  timeUsed: true,
   status: true,
   order: true,
   projectId: true,
@@ -36,6 +38,7 @@ function toDTO(t: TaskRow): TaskDTO {
     description: t.description,
     priority: t.priority,
     dueDate: dbDateToStr(t.dueDate),
+    timeUsed: t.timeUsed,
     status: t.status === "completed" ? "completed" : "active",
     order: t.order,
     projectId: t.projectId,
@@ -70,6 +73,7 @@ export type CreateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  timeUsed?: number | null;
   projectId?: string | null;
 };
 
@@ -102,6 +106,7 @@ export async function createTask(
       description: input.description ?? null,
       priority: input.priority ?? 4,
       dueDate: input.dueDate ? toDbDate(input.dueDate) : null,
+      timeUsed: input.timeUsed ?? null,
       order,
     },
     select: SELECT,
@@ -137,6 +142,7 @@ export type UpdateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  timeUsed?: number | null;
   projectId?: string;
   order?: number;
 };
@@ -160,6 +166,7 @@ export async function updateTask(
   if (input.content !== undefined) data.content = input.content;
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
+  if (input.timeUsed !== undefined) data.timeUsed = input.timeUsed;
   if (input.projectId !== undefined) data.projectId = input.projectId;
   if (input.order !== undefined) data.order = input.order;
   if (input.dueDate !== undefined) {

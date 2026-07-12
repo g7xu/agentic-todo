@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { insertNewlineAtCursor } from "@/lib/textarea";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -245,13 +246,23 @@ export function QuickAdd({
             if (e.key === "Enter") submit();
           }}
         />
-        <input
+        {/* Enter submits; Cmd/Ctrl+Enter inserts a newline (Shift+Enter keeps
+            the textarea's native newline). Grows with its content. */}
+        <textarea
           value={description}
           placeholder="Description"
-          className="placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none"
+          rows={1}
+          className="placeholder:text-muted-foreground field-sizing-content max-h-32 w-full resize-none bg-transparent text-sm outline-none"
           onChange={(e) => setDescription(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
+            if (e.key !== "Enter") return;
+            if (e.metaKey || e.ctrlKey) {
+              e.preventDefault();
+              insertNewlineAtCursor(e.currentTarget, setDescription);
+            } else if (!e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
           }}
         />
 

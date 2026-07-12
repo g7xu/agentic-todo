@@ -45,6 +45,7 @@ export type CreateInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  timeUsed?: number | null;
   projectId?: string | null;
 };
 
@@ -60,6 +61,7 @@ export function useCreateTask() {
         description: input.description ?? null,
         priority: input.priority ?? 4,
         dueDate: input.dueDate ?? null,
+        timeUsed: input.timeUsed ?? null,
         status: "active",
         order: Number.MAX_SAFE_INTEGER,
         projectId: input.projectId ?? "",
@@ -90,6 +92,7 @@ export function useUpdateTask() {
         description: input.description,
         priority: input.priority,
         dueDate: input.dueDate,
+        timeUsed: input.timeUsed,
         projectId: input.projectId,
       }),
     onMutate: async ({ id, input }) => {

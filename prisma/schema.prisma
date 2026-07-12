@@ -58,6 +58,7 @@ model Task {
   priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
   dueDate     DateTime? @map("due_date") @db.Date
   status      String    @default("active") /// 'active' | 'completed'
+  timeUsed    Int?      @map("time_used") /// minutes spent on the task ("HH:MM" in the UI)
   order       Float     @default(0)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

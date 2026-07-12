@@ -14,11 +14,15 @@ const dateStr = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 
+/** Total minutes spent; the UI caps input at "99:59". */
+const timeUsedMin = z.number().int().min(0).max(5999);
+
 const createSchema = z.object({
   content: z.string().trim().min(1).max(500),
   description: z.string().max(5000).nullish(),
   priority: z.number().int().min(1).max(4).optional(),
   dueDate: dateStr.nullish(),
+  timeUsed: timeUsedMin.nullish(),
   projectId: z.string().uuid().nullish(),
 });
 
@@ -27,6 +31,7 @@ const updateSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   priority: z.number().int().min(1).max(4).optional(),
   dueDate: dateStr.nullable().optional(),
+  timeUsed: timeUsedMin.nullable().optional(),
   projectId: z.string().uuid().optional(),
 });
 

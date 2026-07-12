@@ -8,6 +8,7 @@ export type TaskDTO = {
   description: string | null;
   priority: number; // 1=p1 (highest) … 4=default
   dueDate: string | null;
+  timeUsed: number | null; // minutes spent on the task ("HH:MM" in the UI)
   status: TaskStatus;
   order: number;
   projectId: string;
