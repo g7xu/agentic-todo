@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   closestCorners,
   DndContext,
@@ -20,10 +20,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Check, Clock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
+import { minutesToHHMM } from "@/lib/duration";
 import { QuickAdd } from "@/components/quick-add";
 import {
   useCompleteTask,
@@ -59,6 +60,11 @@ type Items = Record<string, string[]>;
 
 /** Pseudo-column key for active tasks whose due date has passed. */
 const OVERDUE = "overdue";
+
+/** Stamped on every drag end/cancel. The browser fires a trailing `click`
+ * after a drop; when the card re-mounted in a new column its local press
+ * position is gone, so this shared stamp is what suppresses that click. */
+let lastDragEndAt = 0;
 
 /** Short "Jul 4"-style label for the red due-date shown on overdue cards. */
 function shortDate(date: string): string {
@@ -109,13 +115,31 @@ function TaskCard({
   const isTemp = task.id.startsWith("temp-");
   const isCompleted = task.status === "completed";
 
+  // Click-to-edit that coexists with drag: a press that travels further than
+  // the drag activation distance (5px) was a drag, not a click — the browser
+  // still fires `click` on drop, so distance is the only reliable signal.
+  const pressPos = useRef<{ x: number; y: number } | null>(null);
+
   return (
     <div
       className={cn(
-        "bg-card group flex items-start gap-2 rounded-md border p-2 text-sm shadow-sm",
+        "bg-card group flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm shadow-sm",
         dragging && "ring-primary/40 ring-2",
         isCompleted && "opacity-70",
       )}
+      onPointerDown={(e) => {
+        pressPos.current = { x: e.clientX, y: e.clientY };
+      }}
+      onClick={(e) => {
+        if (isTemp || dragging) return;
+        if (Date.now() - lastDragEndAt < 300) return; // trailing post-drop click
+        // Portal clicks (edit dialog, dropdown menu) bubble through the React
+        // tree but aren't physically inside the card — ignore them.
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        const p = pressPos.current;
+        if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) >= 5) return;
+        setEditing(true);
+      }}
     >
       <button
         type="button"
@@ -126,9 +150,11 @@ function TaskCard({
           PRIORITY_CIRCLE[task.priority],
         )}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() =>
-          isCompleted ? uncomplete.mutate(task.id) : complete.mutate(task.id)
-        }
+        onClick={(e) => {
+          e.stopPropagation(); // completing a task must not open the editor
+          if (isCompleted) uncomplete.mutate(task.id);
+          else complete.mutate(task.id);
+        }}
       >
         {isCompleted && <Check className="size-3" strokeWidth={3} />}
       </button>
@@ -151,10 +177,18 @@ function TaskCard({
             {task.description}
           </span>
         )}
-        {(showDue && task.dueDate) || (project && !project.isInbox) ? (
+        {(showDue && task.dueDate) ||
+        task.timeUsed !== null ||
+        (project && !project.isInbox) ? (
           <div className="flex items-center gap-2 text-xs">
             {showDue && task.dueDate && (
               <span className="text-red-500">{shortDate(task.dueDate)}</span>
+            )}
+            {task.timeUsed !== null && (
+              <span className="text-muted-foreground flex items-center gap-0.5">
+                <Clock className="size-3" />
+                {minutesToHHMM(task.timeUsed)}
+              </span>
             )}
             {project && !project.isInbox && (
               <span className="text-muted-foreground"># {project.name}</span>
@@ -169,6 +203,7 @@ function TaskCard({
               aria-label="Task options"
               className="hover:bg-accent rounded p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
               onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
@@ -184,15 +219,15 @@ function TaskCard({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {editing && (
-            <EditTaskDialog
-              task={task}
-              projects={projects}
-              open={editing}
-              onOpenChange={setEditing}
-            />
-          )}
         </div>
+      )}
+      {editing && !isTemp && (
+        <EditTaskDialog
+          task={task}
+          projects={projects}
+          open={editing}
+          onOpenChange={setEditing}
+        />
       )}
     </div>
   );
@@ -441,6 +476,7 @@ export function UpcomingBoard() {
   }
 
   function onDragEnd(event: DragEndEvent) {
+    lastDragEndAt = Date.now(); // before any early return — every drop counts
     const { active, over } = event;
     const id = active.id as string;
     const container = findContainer(id);
@@ -480,7 +516,10 @@ export function UpcomingBoard() {
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
-        onDragCancel={() => setActiveId(null)}
+        onDragCancel={() => {
+          lastDragEndAt = Date.now();
+          setActiveId(null);
+        }}
       >
         <div className="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto pb-4">
           {(view[OVERDUE] ?? []).length > 0 && (

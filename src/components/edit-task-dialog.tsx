@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useUpdateTask } from "@/hooks/use-tasks";
+import { hhmmToMinutes, minutesToHHMM } from "@/lib/duration";
+import { insertNewlineAtCursor } from "@/lib/textarea";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
 
 const PRIORITIES = [
@@ -44,10 +47,17 @@ export function EditTaskDialog({
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(String(task.priority));
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
+  const [timeUsed, setTimeUsed] = useState(
+    task.timeUsed === null ? "" : minutesToHHMM(task.timeUsed),
+  );
   const [projectId, setProjectId] = useState(task.projectId);
 
+  // Empty clears the field; anything else must parse as "HH:MM".
+  const timeUsedInvalid =
+    timeUsed.trim() !== "" && hhmmToMinutes(timeUsed) === null;
+
   function save() {
-    if (!content.trim()) return;
+    if (!content.trim() || timeUsedInvalid) return;
     update.mutate({
       id: task.id,
       input: {
@@ -55,10 +65,24 @@ export function EditTaskDialog({
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
         dueDate: dueDate ? dueDate : null,
+        timeUsed: hhmmToMinutes(timeUsed),
         projectId,
       },
     });
     onOpenChange(false);
+  }
+
+  // Enter saves; Cmd/Ctrl+Enter inserts a newline (Shift+Enter keeps the
+  // textarea's native newline behavior).
+  function onDescriptionKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter") return;
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      insertNewlineAtCursor(e.currentTarget, setDescription);
+    } else if (!e.shiftKey) {
+      e.preventDefault();
+      save();
+    }
   }
 
   return (
@@ -78,10 +102,12 @@ export function EditTaskDialog({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="description">Description</Label>
-            <Input
+            <Textarea
               id="description"
               value={description}
+              placeholder="⌘⏎ for a new line"
               onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={onDescriptionKeyDown}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -110,20 +136,33 @@ export function EditTaskDialog({
               </Select>
             </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>Project</Label>
-            <Select value={projectId} onValueChange={setProjectId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="time-used">Time used</Label>
+              <Input
+                id="time-used"
+                placeholder="00:00"
+                inputMode="numeric"
+                aria-invalid={timeUsedInvalid || undefined}
+                value={timeUsed}
+                onChange={(e) => setTimeUsed(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Project</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
         <DialogFooter>

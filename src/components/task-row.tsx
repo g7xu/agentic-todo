@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Flag, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Clock, Flag, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { todayStr } from "@/lib/date";
+import { minutesToHHMM } from "@/lib/duration";
 import {
   useCompleteTask,
   useDeleteTask,
@@ -63,11 +64,21 @@ export function TaskRow({
   const isTemp = task.id.startsWith("temp-");
 
   return (
-    <div className="group hover:bg-accent/40 flex items-center gap-3 border-b px-3 py-2">
+    <div
+      className="group hover:bg-accent/40 flex cursor-pointer items-center gap-3 border-b px-3 py-2"
+      onClick={(e) => {
+        // React bubbles portal events through the component tree, so clicks
+        // inside the (portaled) edit dialog land here too — skip anything
+        // that isn't physically inside the row.
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        if (!isTemp) setEditing(true);
+      }}
+    >
       <Checkbox
         checked={isCompleted}
         disabled={isTemp}
         aria-label={isCompleted ? "Mark active" : "Complete task"}
+        onClick={(e) => e.stopPropagation()} // checking must not open the editor
         onCheckedChange={(checked) =>
           checked ? complete.mutate(task.id) : uncomplete.mutate(task.id)
         }
@@ -86,11 +97,19 @@ export function TaskRow({
         >
           {task.content}
         </span>
-        {(task.dueDate || (showProject && project && !project.isInbox)) && (
+        {(task.dueDate ||
+          task.timeUsed !== null ||
+          (showProject && project && !project.isInbox)) && (
           <div className="flex items-center gap-2 text-xs">
             {task.dueDate && (
               <span className={overdue ? "text-red-500" : "text-muted-foreground"}>
                 {dueLabel(task.dueDate, today)}
+              </span>
+            )}
+            {task.timeUsed !== null && (
+              <span className="text-muted-foreground flex items-center gap-0.5">
+                <Clock className="size-3" />
+                {minutesToHHMM(task.timeUsed)}
               </span>
             )}
             {showProject && project && !project.isInbox && (
@@ -105,7 +124,10 @@ export function TaskRow({
           <button
             aria-label="Edit task"
             className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
-            onClick={() => setEditing(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
           >
             <Pencil className="size-4" />
           </button>
@@ -113,6 +135,7 @@ export function TaskRow({
             <DropdownMenuTrigger
               aria-label="Task options"
               className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="size-4" />
             </DropdownMenuTrigger>
