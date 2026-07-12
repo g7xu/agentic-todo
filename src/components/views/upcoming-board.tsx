@@ -240,7 +240,7 @@ function Column({
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const isOverdue = date === OVERDUE;
   return (
-    <div className="flex w-64 shrink-0 flex-col">
+    <div className="flex max-h-full w-64 shrink-0 flex-col">
       <div
         className={cn(
           "px-1 pb-2 text-sm font-medium",
@@ -249,37 +249,43 @@ function Column({
       >
         {label}
       </div>
+      {/* The box hugs its content (columns are `items-start` in the board
+          row) but never exceeds the board height (`max-h-full` on the column
+          wrapper). The task list scrolls internally so the quick-add footer
+          below it stays visible no matter how many tasks a day has. */}
       <div
         ref={setNodeRef}
         className={cn(
-          "bg-muted/30 flex min-h-24 flex-1 flex-col gap-2 rounded-lg border p-2",
+          "bg-muted/30 flex min-h-24 flex-col overflow-hidden rounded-lg border",
           isOver && !isOverdue && "ring-primary/40 ring-2",
         )}
       >
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          {ids.map((id) => {
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {ids.map((id) => {
+              const task = taskById.get(id);
+              return task ? (
+                <SortableTask
+                  key={id}
+                  task={task}
+                  projects={projects}
+                  showDue={isOverdue}
+                />
+              ) : null;
+            })}
+          </SortableContext>
+          {/* Completed tasks stay in their day column, crossed out at the
+              bottom; plain cards (no useSortable) so they can't be dragged. */}
+          {completedIds.map((id) => {
             const task = taskById.get(id);
             return task ? (
-              <SortableTask
-                key={id}
-                task={task}
-                projects={projects}
-                showDue={isOverdue}
-              />
+              <TaskCard key={id} task={task} projects={projects} />
             ) : null;
           })}
-        </SortableContext>
-        {/* Completed tasks stay in their day column, crossed out at the
-            bottom; plain cards (no useSortable) so they can't be dragged. */}
-        {completedIds.map((id) => {
-          const task = taskById.get(id);
-          return task ? (
-            <TaskCard key={id} task={task} projects={projects} />
-          ) : null;
-        })}
+        </div>
         {/* No quick-add in Overdue — new tasks can't be created "overdue". */}
         {!isOverdue && (
-          <div className="mt-auto">
+          <div className="shrink-0 p-2 pt-0">
             <QuickAdd
               defaultDueDate={date}
               placeholder="Add a task…"
@@ -476,7 +482,7 @@ export function UpcomingBoard() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
+        <div className="flex min-h-0 flex-1 items-start gap-4 overflow-x-auto pb-4">
           {(view[OVERDUE] ?? []).length > 0 && (
             <Column
               date={OVERDUE}

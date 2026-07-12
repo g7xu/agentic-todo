@@ -21,7 +21,10 @@ export function AppShell({
 
   return (
     <TimezoneProvider tz={timezone}>
-      <div className="flex flex-1 flex-col">
+      {/* h-dvh pins the shell to the viewport so `overflow-y-auto` on <main>
+          is the real scroll container — body is min-h-full and would otherwise
+          grow with content, letting pages run past the viewport bottom. */}
+      <div className="flex h-dvh flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
           <span className="font-semibold tracking-tight">Agentic Todoist</span>
           <div className="flex items-center gap-3">

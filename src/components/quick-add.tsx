@@ -96,19 +96,34 @@ export function QuickAdd({
   } | null>(null);
 
   // Overlay mode: position the expanded card in a fixed layer anchored to the
-  // collapsed row, clamped to the viewport, so it grows downward and escapes
-  // the board's overflow clipping.
+  // collapsed row, clamped to the viewport, so it escapes the board's overflow
+  // clipping. Clamping shifts the card up when the anchor sits near the bottom
+  // of the screen (e.g. the quick-add pinned under a full column).
   const updateRect = useCallback(() => {
     const r = anchorRef.current?.getBoundingClientRect();
     if (!r) return;
-    const width = Math.max(r.width, 320);
+    const width = r.width;
     const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
-    setRect({ top: r.top, left, width });
+    // Card height is 0 on the first pass (not rendered yet); the effect below
+    // re-clamps once it's measurable.
+    const cardH = cardRef.current?.offsetHeight ?? 0;
+    const top = Math.max(8, Math.min(r.top, window.innerHeight - cardH - 8));
+    setRect((prev) =>
+      prev && prev.top === top && prev.left === left && prev.width === width
+        ? prev
+        : { top, left, width },
+    );
   }, []);
 
   useLayoutEffect(() => {
     if (expanded && expandOverlay) updateRect();
   }, [expanded, expandOverlay, updateRect]);
+
+  // Second pass after the card mounts: re-clamp with its real height. The
+  // equality guard in updateRect keeps this from looping.
+  useLayoutEffect(() => {
+    if (rect) updateRect();
+  }, [rect, updateRect]);
 
   const inbox = projects.find((p) => p.isInbox);
   const selectedProject =
@@ -376,8 +391,8 @@ export function QuickAdd({
   if (!expandOverlay) return card;
 
   // The invisible collapsed row keeps the surrounding layout at its collapsed
-  // size; the card renders in a fixed layer anchored to it, growing downward
-  // only and unaffected by the board's overflow clipping.
+  // size; the card renders in a fixed layer anchored to it, clamped to the
+  // viewport and unaffected by the board's overflow clipping.
   return (
     <div ref={anchorRef}>
       <div className="invisible" aria-hidden>
