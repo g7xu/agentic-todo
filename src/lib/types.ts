@@ -20,15 +20,21 @@ export type TaskDTO = {
   createdAt: string;
 };
 
-/** Client-facing routine (daily-recurring task template) shape. An
- * unfinished instance always carries forward to the next day. */
+export type RoutineRepeatBase = "scheduled" | "completed";
+
+/** Client-facing routine (recurring task template) shape. An unfinished
+ * instance always carries forward to the next day, whatever the cadence. */
 export type RoutineDTO = {
   id: string;
   content: string;
   description: string | null;
   priority: number; // 1=p1 (highest) … 4=default
   projectId: string;
-  schedule: string; // v1: literal 'daily'
+  repeatEvery: number; // every N units
+  repeatUnit: string; // 'day' (week/month later)
+  repeatBase: RoutineRepeatBase;
+  startDate: string; // 'YYYY-MM-DD' grid anchor (user-local creation day)
+  endDate: string | null; // last day new instances spawn (inclusive)
   active: boolean;
   createdAt: string;
 };

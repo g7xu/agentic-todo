@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
-import { toDbDate } from "@/lib/date";
-import type { RoutineDTO } from "@/lib/types";
+import { dateStrInTz, dbDateToStr, diffDays, toDbDate, todayStr } from "@/lib/date";
+import type { RoutineDTO, RoutineRepeatBase } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 
 type RoutineRow = {
@@ -9,7 +9,11 @@ type RoutineRow = {
   description: string | null;
   priority: number;
   projectId: string;
-  schedule: string;
+  repeatEvery: number;
+  repeatUnit: string;
+  repeatBase: string;
+  startDate: Date;
+  endDate: Date | null;
   active: boolean;
   createdAt: Date;
 };
@@ -20,7 +24,11 @@ const SELECT = {
   description: true,
   priority: true,
   projectId: true,
-  schedule: true,
+  repeatEvery: true,
+  repeatUnit: true,
+  repeatBase: true,
+  startDate: true,
+  endDate: true,
   active: true,
   createdAt: true,
 } as const;
@@ -32,7 +40,11 @@ function toDTO(r: RoutineRow): RoutineDTO {
     description: r.description,
     priority: r.priority,
     projectId: r.projectId,
-    schedule: r.schedule,
+    repeatEvery: r.repeatEvery,
+    repeatUnit: r.repeatUnit,
+    repeatBase: r.repeatBase === "completed" ? "completed" : "scheduled",
+    startDate: dbDateToStr(r.startDate)!,
+    endDate: dbDateToStr(r.endDate),
     active: r.active,
     createdAt: r.createdAt.toISOString(),
   };
@@ -52,6 +64,9 @@ export type CreateRoutineInput = {
   description?: string | null;
   priority?: number;
   projectId?: string | null;
+  repeatEvery?: number;
+  repeatBase?: RoutineRepeatBase;
+  endDate?: string | null;
 };
 
 export async function createRoutine(
@@ -68,6 +83,13 @@ export async function createRoutine(
     projectId = await getInboxId(userId);
   }
 
+  // The grid anchor is the user-local creation day (docs/ROUTINES.md §4.1).
+  const profile = await prisma.profile.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const startDate = todayStr(profile?.timezone ?? "UTC");
+
   const r = await prisma.routine.create({
     data: {
       userId,
@@ -75,6 +97,10 @@ export async function createRoutine(
       content: input.content,
       description: input.description ?? null,
       priority: input.priority ?? 4,
+      repeatEvery: input.repeatEvery ?? 1,
+      repeatBase: input.repeatBase ?? "scheduled",
+      startDate: toDbDate(startDate),
+      endDate: input.endDate ? toDbDate(input.endDate) : null,
     },
     select: SELECT,
   });
@@ -86,6 +112,9 @@ export type UpdateRoutineInput = {
   description?: string | null;
   priority?: number;
   projectId?: string;
+  repeatEvery?: number;
+  repeatBase?: RoutineRepeatBase;
+  endDate?: string | null;
   active?: boolean;
 };
 
@@ -110,6 +139,11 @@ export async function updateRoutine(
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
   if (input.projectId !== undefined) data.projectId = input.projectId;
+  if (input.repeatEvery !== undefined) data.repeatEvery = input.repeatEvery;
+  if (input.repeatBase !== undefined) data.repeatBase = input.repeatBase;
+  if (input.endDate !== undefined) {
+    data.endDate = input.endDate ? toDbDate(input.endDate) : null;
+  }
   if (input.active !== undefined) data.active = input.active;
 
   const r = await prisma.routine.update({ where: { id }, data, select: SELECT });
@@ -135,18 +169,26 @@ export async function deleteRoutine(userId: string, id: string): Promise<void> {
 }
 
 /**
- * The recurrence engine (docs/ROUTINES.md §3.2) — the only place that knows
- * routines recur. Idempotent and user-scoped; called from the tasks read path
- * with `today = todayStr(profile.timezone)`. Carry → spawn:
+ * The recurrence engine (docs/ROUTINES.md §3.2, §4.1) — the only place that
+ * knows routines recur. Idempotent and user-scoped; called from the tasks
+ * read path with `today = todayStr(profile.timezone)` and the profile tz
+ * (needed to turn `completedAt` timestamps into local calendar days).
+ * Carry → spawn:
  *
- *  1. carry:  an unfinished instance from a past day rolls forward to today
- *             (a routine never piles up and never silently disappears).
- *             Paused routines' leftovers are parked as 'missed' instead of
- *             following the user around; so are the rare collision cases
- *             (today's slot already taken), keeping the (routineId, dueDate)
- *             unique satisfiable.
- *  2. spawn:  one instance per active routine lacking one dated today or
- *             later, in any status.
+ *  1. carry:  an unfinished instance from a past day rolls forward to today,
+ *             whatever the cadence (a routine never piles up and never
+ *             silently disappears). Paused routines' leftovers are parked as
+ *             'missed' instead of following the user around; so are the rare
+ *             collision cases (today's slot already taken), keeping the
+ *             (routineId, dueDate) unique satisfiable.
+ *  2. spawn:  one instance per active routine that is DUE today and lacks an
+ *             instance dated today or later (any status). Due today means:
+ *             - scheduled-based: today is on the startDate + k·repeatEvery
+ *               grid (late completion never shifts the grid);
+ *             - completed-based: at least repeatEvery days have passed since
+ *               the local day of the last completion (first occurrence on
+ *               startDate);
+ *             and today is not past endDate (inclusive).
  *
  * Concurrent invocations are absorbed by the (routineId, dueDate) unique
  * index + `skipDuplicates` — no locking.
@@ -154,6 +196,7 @@ export async function deleteRoutine(userId: string, id: string): Promise<void> {
 export async function materializeRoutines(
   userId: string,
   today: string,
+  tz: string,
 ): Promise<void> {
   const todayDb = toDbDate(today);
 
@@ -205,11 +248,11 @@ export async function materializeRoutines(
     }
   }
 
-  // 2. Spawn instances for active routines that don't have one dated today
-  // OR LATER, in any status. A completed today-instance must not respawn,
-  // and the carried instance above already IS today's — the gte check keeps
-  // this safe even for future-dated instances (e.g. after a westward
-  // timezone change).
+  // 2. Spawn instances for active, due-today routines that don't have one
+  // dated today OR LATER, in any status. A completed today-instance must not
+  // respawn, and the carried instance above already IS today's — the gte
+  // check keeps this safe even for future-dated instances (e.g. after a
+  // westward timezone change).
   const routines = await prisma.routine.findMany({
     where: { userId, active: true },
     select: {
@@ -218,6 +261,10 @@ export async function materializeRoutines(
       content: true,
       description: true,
       priority: true,
+      repeatEvery: true,
+      repeatBase: true,
+      startDate: true,
+      endDate: true,
     },
   });
   if (routines.length === 0) return;
@@ -231,7 +278,44 @@ export async function materializeRoutines(
     select: { routineId: true },
   });
   const have = new Set(existing.map((e) => e.routineId));
-  const need = routines.filter((r) => !have.has(r.id));
+  const candidates = routines.filter((r) => !have.has(r.id));
+  if (candidates.length === 0) return;
+
+  // Completed-based routines measure from the local day of the newest
+  // completion; scheduled-based ones from their fixed startDate grid.
+  const completedBasedIds = candidates
+    .filter((r) => r.repeatBase === "completed")
+    .map((r) => r.id);
+  const lastCompletions =
+    completedBasedIds.length > 0
+      ? await prisma.task.groupBy({
+          by: ["routineId"],
+          where: {
+            userId,
+            routineId: { in: completedBasedIds },
+            status: "completed",
+            completedAt: { not: null },
+          },
+          _max: { completedAt: true },
+        })
+      : [];
+  const lastCompletionDay = new Map(
+    lastCompletions
+      .filter((g) => g._max.completedAt !== null)
+      .map((g) => [g.routineId, dateStrInTz(g._max.completedAt!, tz)]),
+  );
+
+  const need = candidates.filter((r) => {
+    const endDate = dbDateToStr(r.endDate);
+    if (endDate && today > endDate) return false;
+    if (r.repeatBase === "completed") {
+      const last = lastCompletionDay.get(r.id);
+      if (!last) return today >= dbDateToStr(r.startDate)!;
+      return diffDays(last, today) >= r.repeatEvery;
+    }
+    const sinceStart = diffDays(dbDateToStr(r.startDate)!, today);
+    return sinceStart >= 0 && sinceStart % r.repeatEvery === 0;
+  });
   if (need.length === 0) return;
 
   // Append relative to each target project's list (TDD §5).

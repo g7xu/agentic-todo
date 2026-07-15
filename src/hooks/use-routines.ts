@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { RoutineDTO } from "@/lib/types";
+import type { RoutineDTO, RoutineRepeatBase } from "@/lib/types";
 import {
   createRoutineAction,
   deleteRoutineAction,
@@ -31,6 +31,9 @@ export type CreateRoutineInput = {
   description?: string | null;
   priority?: number;
   projectId?: string | null;
+  repeatEvery?: number;
+  repeatBase?: RoutineRepeatBase;
+  endDate?: string | null;
 };
 
 export type UpdateRoutineInput = {
@@ -38,6 +41,9 @@ export type UpdateRoutineInput = {
   description?: string | null;
   priority?: number;
   projectId?: string;
+  repeatEvery?: number;
+  repeatBase?: RoutineRepeatBase;
+  endDate?: string | null;
   active?: boolean;
 };
 

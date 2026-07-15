@@ -12,14 +12,15 @@ export async function GET() {
       where: { id: user.id },
       select: { timezone: true },
     });
-    const today = todayStr(profile?.timezone ?? "UTC");
+    const tz = profile?.timezone ?? "UTC";
+    const today = todayStr(tz);
 
     // Lazy routine materialization (docs/ROUTINES.md §3.2): the tasks read is
     // the single fetch behind the ['tasks'] query, so it doubles as the
     // scheduler. A failure here must not take down every task view — log it
     // and serve tasks; the next read retries (the step is idempotent).
     try {
-      await materializeRoutines(user.id, today);
+      await materializeRoutines(user.id, today, tz);
     } catch (e) {
       console.error("materializeRoutines failed:", e);
     }

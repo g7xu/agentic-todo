@@ -80,18 +80,22 @@ model Task {
   @@map("tasks")
 }
 
-/// A daily-recurring task template. Never shown in task lists; spawns one
-/// `Task` instance per local day via `materializeRoutines` (docs/ROUTINES.md).
+/// A recurring task template. Never shown in task lists; spawns `Task`
+/// instances on its cadence via `materializeRoutines` (docs/ROUTINES.md §4.1).
 model Routine {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  projectId   String   @map("project_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
   content     String
   description String?
-  priority    Int      @default(4) @db.SmallInt /// 1=p1 highest … 4=default
-  schedule    String   @default("daily") /// v1: literal 'daily' only (RRULE later)
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
+  repeatEvery Int       @default(1) @map("repeat_every") /// every N units
+  repeatUnit  String    @default("day") @map("repeat_unit") /// 'day' (week/month later)
+  repeatBase  String    @default("scheduled") @map("repeat_base") /// 'scheduled' | 'completed'
+  startDate   DateTime  @default(dbgenerated("CURRENT_DATE")) @map("start_date") @db.Date /// grid anchor; app sets user-local creation day
+  endDate     DateTime? @map("end_date") @db.Date /// last day new instances spawn (inclusive); null = never
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user    Profile @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])

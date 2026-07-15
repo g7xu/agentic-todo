@@ -5,15 +5,29 @@
  * Prisma round-trips as a UTC-midnight `Date`.
  */
 
-/** Today's local calendar date in the given IANA tz, as 'YYYY-MM-DD'. */
-export function todayStr(tz: string): string {
+/** The local calendar date of `d` in the given IANA tz, as 'YYYY-MM-DD'. */
+export function dateStrInTz(d: Date, tz: string): string {
   const zone = isValidTimeZone(tz) ? tz : "UTC";
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: zone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(d);
+}
+
+/** Today's local calendar date in the given IANA tz, as 'YYYY-MM-DD'. */
+export function todayStr(tz: string): string {
+  return dateStrInTz(new Date(), tz);
+}
+
+/** Whole days from `a` to `b` ('YYYY-MM-DD' strings); negative if b < a. */
+export function diffDays(a: string, b: string): number {
+  return Math.round(
+    (new Date(`${b}T00:00:00.000Z`).getTime() -
+      new Date(`${a}T00:00:00.000Z`).getTime()) /
+      86_400_000,
+  );
 }
 
 /** 'YYYY-MM-DD' → a UTC-midnight Date for storing into a Postgres `date`. */

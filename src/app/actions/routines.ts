@@ -10,11 +10,18 @@ import {
 } from "@/lib/data/routines";
 import type { RoutineDTO } from "@/lib/types";
 
+const dateStr = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+
 const createSchema = z.object({
   content: z.string().trim().min(1).max(500),
   description: z.string().max(5000).nullish(),
   priority: z.number().int().min(1).max(4).optional(),
   projectId: z.string().uuid().nullish(),
+  repeatEvery: z.number().int().min(1).max(365).optional(),
+  repeatBase: z.enum(["scheduled", "completed"]).optional(),
+  endDate: dateStr.nullish(),
 });
 
 const updateSchema = z.object({
@@ -22,6 +29,9 @@ const updateSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   priority: z.number().int().min(1).max(4).optional(),
   projectId: z.string().uuid().optional(),
+  repeatEvery: z.number().int().min(1).max(365).optional(),
+  repeatBase: z.enum(["scheduled", "completed"]).optional(),
+  endDate: dateStr.nullable().optional(),
   active: z.boolean().optional(),
 });
 
