@@ -291,6 +291,32 @@ calls are rate-limited/fan-out-guarded like existing tools.
 
 ---
 
+## 4.1 Custom repeat (proposed 2026-07-14 — awaiting owner go)
+
+Replace the fixed daily cadence with a Things-style custom repeat. Controls: **Based on**
+(scheduled date | completed date), **Every** N days (unit column ready for week/month later),
+**Ends** (never | on date, inclusive).
+
+- **Scheduled-based:** occurrences on a fixed grid `startDate + k·N` regardless of completion
+  timing; `startDate` anchors the grid and defaults to the creation day (user tz). Late
+  completion does not shift the grid.
+- **Completed-based:** next due = local calendar day of `completedAt` (profile tz) + N; first
+  occurrence on `startDate`.
+- **Composition with RV1/RV2:** carry unchanged — an unfinished instance follows the user daily
+  between occurrences, and if still active at the next occurrence it *is* that occurrence (the
+  `(routineId, dueDate)` guard merges them, Todoist-style single overdue). "Ends" stops new
+  spawns only; a leftover keeps carrying until done or deleted.
+- **Schema (one migration, replaces `schedule`):** `repeatEvery Int @default(1)`,
+  `repeatUnit String @default("day")`, `repeatBase String @default("scheduled")`,
+  `startDate @db.Date` (set app-side at creation), `endDate @db.Date?` (inclusive).
+  Existing routines map to every-1-day/scheduled/never — behavior identical.
+- **Engine:** spawner gains per-routine "due today?" (`(today−startDate) % N === 0` resp.
+  `today ≥ lastCompletionLocal + N`); needs profile tz passed in for completion-day math.
+- **Phases:** CR1 schema + engine + data layer + test-suite extension (cadence grid,
+  completed-shift, end date, carry across gaps); CR2 dialog Repeat block + routines-page cadence
+  summary ("Every 3 days · after completion · until Aug 1") + browser verify.
+- **Deferred:** week/month units (weekday picking, month-end rules), time-of-day.
+
 ## 5. Deferred (v2 candidates)
 
 - Non-daily schedules (`schedule` → RRULE subset) — column already exists.
