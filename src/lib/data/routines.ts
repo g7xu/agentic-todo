@@ -173,8 +173,8 @@ export async function materializeRoutines(
   });
 
   // 2. Carry: newest stale instance per routine moves to today; extras (or a
-  // stale one whose routine already has a today instance) are swept instead,
-  // so the (routineId, dueDate) unique can't collide.
+  // stale one whose routine already has a today-or-later instance) are swept
+  // instead, so the (routineId, dueDate) unique can't collide.
   const stale = await prisma.task.findMany({
     where: {
       userId,
@@ -188,7 +188,11 @@ export async function materializeRoutines(
   if (stale.length > 0) {
     const staleRoutineIds = [...new Set(stale.map((t) => t.routineId!))];
     const todayRows = await prisma.task.findMany({
-      where: { userId, routineId: { in: staleRoutineIds }, dueDate: todayDb },
+      where: {
+        userId,
+        routineId: { in: staleRoutineIds },
+        dueDate: { gte: todayDb },
+      },
       select: { routineId: true },
     });
     const taken = new Set(todayRows.map((r) => r.routineId));
@@ -217,7 +221,10 @@ export async function materializeRoutines(
   }
 
   // 3. Spawn instances for active routines that don't have one dated today
-  // (in any status — a completed/missed today-instance must not respawn).
+  // OR LATER, in any status. A completed/missed today-instance must not
+  // respawn, and an instance the user rescheduled to a future day counts as
+  // a postponement — regenerating today's would duplicate the task
+  // (docs/ROUTINES.md §2).
   const routines = await prisma.routine.findMany({
     where: { userId, active: true },
     select: {
@@ -233,7 +240,7 @@ export async function materializeRoutines(
   const existing = await prisma.task.findMany({
     where: {
       userId,
-      dueDate: todayDb,
+      dueDate: { gte: todayDb },
       routineId: { in: routines.map((r) => r.id) },
     },
     select: { routineId: true },

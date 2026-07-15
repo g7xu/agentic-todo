@@ -70,6 +70,11 @@ new machinery is the spawn/sweep step and routine CRUD.
 - **Template vs instance edits:** editing a routine affects *future* instances only (today's
   already-spawned instance keeps its values). Editing one instance (any normal task edit) never
   touches the template.
+- **Rescheduling an instance to a future day = postpone.** The spawner treats "an instance dated
+  today **or later** exists" as satisfied, so nothing regenerates for today (or the gap days) and
+  the moved instance is that future day's instance. Daily spawning resumes the day after it.
+  (Without this, moving today's instance forward would immediately regenerate today's — a
+  duplicate.) Moving an instance to a *past* day just gets it swept to `missed` on the next load.
 - **Pause** (`active = false`): no new instances; history remains; resumable.
 - **Delete routine:** completed/missed instances survive as history (`routineId` set NULL via
   `onDelete: SetNull`); today's still-active instance is deleted with it.
