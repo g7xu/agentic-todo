@@ -20,24 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateRoutine, useUpdateRoutine } from "@/hooks/use-routines";
-import type { ProjectDTO, RoutineDTO, RoutineOnMiss } from "@/lib/types";
+import type { ProjectDTO, RoutineDTO } from "@/lib/types";
 
 const PRIORITIES = [
   { value: "1", label: "P1 — Urgent" },
   { value: "2", label: "P2 — High" },
   { value: "3", label: "P3 — Medium" },
   { value: "4", label: "P4 — None" },
-];
-
-const ON_MISS = [
-  {
-    value: "skip",
-    label: "Skip — a missed day is recorded, tomorrow starts fresh",
-  },
-  {
-    value: "carry",
-    label: "Carry — an unfinished task rolls over to the next day",
-  },
 ];
 
 /** Create (no `routine`) or edit (with `routine`) a daily routine template.
@@ -63,9 +52,6 @@ export function RoutineDialog({
   const [projectId, setProjectId] = useState(
     routine?.projectId ?? inbox?.id ?? "",
   );
-  const [onMiss, setOnMiss] = useState<RoutineOnMiss>(
-    routine?.onMiss ?? "skip",
-  );
 
   function save() {
     if (!content.trim()) return;
@@ -74,7 +60,6 @@ export function RoutineDialog({
       description: description.trim() ? description.trim() : null,
       priority: Number(priority),
       projectId,
-      onMiss,
     };
     if (routine) {
       update.mutate({ id: routine.id, input: common });
@@ -144,24 +129,9 @@ export function RoutineDialog({
               </Select>
             </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>If a day is missed</Label>
-            <Select
-              value={onMiss}
-              onValueChange={(v) => setOnMiss(v as RoutineOnMiss)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ON_MISS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <p className="text-muted-foreground text-xs">
+            An unfinished routine task carries over to the next day.
+          </p>
           {routine && (
             <p className="text-muted-foreground text-xs">
               Changes apply to future days — today’s task keeps its current

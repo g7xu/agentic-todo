@@ -56,6 +56,10 @@ export function EditTaskDialog({
   const timeUsedInvalid =
     timeUsed.trim() !== "" && hhmmToMinutes(timeUsed) === null;
 
+  // Routine instances keep their date — each one stands for a specific day
+  // (the server rejects reschedules; the field below is read-only for them).
+  const isRoutineInstance = task.routineId !== null;
+
   function save() {
     if (!content.trim() || timeUsedInvalid) return;
     update.mutate({
@@ -64,7 +68,7 @@ export function EditTaskDialog({
         content: content.trim(),
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
-        dueDate: dueDate ? dueDate : null,
+        ...(isRoutineInstance ? {} : { dueDate: dueDate ? dueDate : null }),
         timeUsed: hhmmToMinutes(timeUsed),
         projectId,
       },
@@ -117,8 +121,19 @@ export function EditTaskDialog({
                 id="due"
                 type="date"
                 value={dueDate}
+                disabled={isRoutineInstance}
+                title={
+                  isRoutineInstance
+                    ? "Daily routine — the date is fixed"
+                    : undefined
+                }
                 onChange={(e) => setDueDate(e.target.value)}
               />
+              {isRoutineInstance && (
+                <p className="text-muted-foreground text-xs">
+                  Daily routine — the date is fixed.
+                </p>
+              )}
             </div>
             <div className="grid gap-1.5">
               <Label>Priority</Label>

@@ -15,7 +15,6 @@ const createSchema = z.object({
   description: z.string().max(5000).nullish(),
   priority: z.number().int().min(1).max(4).optional(),
   projectId: z.string().uuid().nullish(),
-  onMiss: z.enum(["skip", "carry"]).optional(),
 });
 
 const updateSchema = z.object({
@@ -23,7 +22,6 @@ const updateSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   priority: z.number().int().min(1).max(4).optional(),
   projectId: z.string().uuid().optional(),
-  onMiss: z.enum(["skip", "carry"]).optional(),
   active: z.boolean().optional(),
 });
 

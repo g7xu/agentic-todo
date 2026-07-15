@@ -24,7 +24,7 @@ export async function GET() {
       console.error("materializeRoutines failed:", e);
     }
 
-    return NextResponse.json({ tasks: await listTasks(user.id, today) });
+    return NextResponse.json({ tasks: await listTasks(user.id) });
   } catch (e) {
     if (e instanceof UnauthenticatedError) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });

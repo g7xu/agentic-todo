@@ -113,11 +113,6 @@ export default function RoutinesPage() {
                 </span>
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                   <span>Daily</span>
-                  <span>
-                    {r.onMiss === "carry"
-                      ? "Carries over if missed"
-                      : "Skips if missed"}
-                  </span>
                   {project && !project.isInbox && <span># {project.name}</span>}
                 </div>
               </div>

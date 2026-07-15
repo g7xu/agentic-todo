@@ -1,6 +1,6 @@
-/** 'missed' = a routine instance swept at day rollover; reversible via the
- * normal complete path (backfill). Views only match 'active'/'completed', so
- * missed rows stay out of every list except the Today recap strip. */
+/** 'missed' = a parked routine instance (paused routine's leftover or a
+ * rare carry collision). Views only match 'active'/'completed', so these
+ * rows never appear in any list. */
 export type TaskStatus = "active" | "completed" | "missed";
 
 /** Client-facing task shape. Dates are strings: `dueDate` is a calendar date
@@ -20,9 +20,8 @@ export type TaskDTO = {
   createdAt: string;
 };
 
-export type RoutineOnMiss = "skip" | "carry";
-
-/** Client-facing routine (daily-recurring task template) shape. */
+/** Client-facing routine (daily-recurring task template) shape. An
+ * unfinished instance always carries forward to the next day. */
 export type RoutineDTO = {
   id: string;
   content: string;
@@ -30,7 +29,6 @@ export type RoutineDTO = {
   priority: number; // 1=p1 (highest) … 4=default
   projectId: string;
   schedule: string; // v1: literal 'daily'
-  onMiss: RoutineOnMiss;
   active: boolean;
   createdAt: string;
 };

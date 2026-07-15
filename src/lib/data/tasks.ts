@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { addDays, dbDateToStr, toDbDate } from "@/lib/date";
+import { dbDateToStr, toDbDate } from "@/lib/date";
 import type { TaskDTO } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 
@@ -55,15 +55,11 @@ function toDTO(t: TaskRow): TaskDTO {
 
 /**
  * All active tasks plus recently-completed tasks (for the Completed view and
- * the per-view "show completed" toggle). Scoped to the user. When `today`
- * ('YYYY-MM-DD', user-local) is given, also includes the last two days'
- * missed routine instances for the Today recap strip (docs/ROUTINES.md §3.3).
+ * the per-view "show completed" toggle). Scoped to the user. 'missed' rows
+ * (parked routine instances) are deliberately never returned.
  */
-export async function listTasks(
-  userId: string,
-  today?: string,
-): Promise<TaskDTO[]> {
-  const [active, completed, missed] = await Promise.all([
+export async function listTasks(userId: string): Promise<TaskDTO[]> {
+  const [active, completed] = await Promise.all([
     prisma.task.findMany({
       where: { userId, status: "active" },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -75,19 +71,8 @@ export async function listTasks(
       take: 200,
       select: SELECT,
     }),
-    today
-      ? prisma.task.findMany({
-          where: {
-            userId,
-            status: "missed",
-            dueDate: { gte: toDbDate(addDays(today, -2)) },
-          },
-          orderBy: { dueDate: "desc" },
-          select: SELECT,
-        })
-      : Promise.resolve([]),
   ]);
-  return [...active, ...completed, ...missed].map(toDTO);
+  return [...active, ...completed].map(toDTO);
 }
 
 export type CreateTaskInput = {
@@ -176,7 +161,7 @@ export async function updateTask(
 ): Promise<TaskDTO> {
   const existing = await prisma.task.findFirst({
     where: { id, userId },
-    select: { id: true },
+    select: { id: true, routineId: true, dueDate: true },
   });
   if (!existing) throw new Error("Task not found");
 
@@ -192,6 +177,11 @@ export async function updateTask(
   if (input.projectId !== undefined) data.projectId = input.projectId;
   if (input.order !== undefined) data.order = input.order;
   if (input.dueDate !== undefined) {
+    // Routine instances keep their date — each one stands for a specific day
+    // (docs/ROUTINES.md §2). Same-date writes pass so board reorders work.
+    if (existing.routineId && input.dueDate !== dbDateToStr(existing.dueDate)) {
+      throw new Error("Routine tasks can't be rescheduled");
+    }
     data.dueDate = input.dueDate ? toDbDate(input.dueDate) : null;
   }
 
@@ -253,20 +243,32 @@ async function partitionOwned(
   };
 }
 
-/** Bulk reschedule (one shared dueDate) — all-or-nothing, RLS-equivalent scoping. */
+/** Bulk reschedule (one shared dueDate) — all-or-nothing, RLS-equivalent scoping.
+ * Routine instances are skipped: their date is fixed (docs/ROUTINES.md §2). */
 export async function bulkReschedule(
   userId: string,
   ids: string[],
   dueDate: string,
 ): Promise<BulkResult> {
   const { owned, skipped } = await partitionOwned(userId, ids);
+  const routineRows = await prisma.task.findMany({
+    where: { id: { in: owned }, userId, routineId: { not: null } },
+    select: { id: true },
+  });
+  const routineIds = new Set(routineRows.map((r) => r.id));
+  const movable = owned.filter((id) => !routineIds.has(id));
+  skipped.push(
+    ...owned
+      .filter((id) => routineIds.has(id))
+      .map((id) => ({ id, reason: "routine_date_fixed" })),
+  );
   await prisma.$transaction([
     prisma.task.updateMany({
-      where: { id: { in: owned }, userId },
+      where: { id: { in: movable }, userId },
       data: { dueDate: toDbDate(dueDate) },
     }),
   ]);
-  return { applied: owned, skipped, tasksChanged: owned.length > 0 };
+  return { applied: movable, skipped, tasksChanged: movable.length > 0 };
 }
 
 export async function bulkComplete(

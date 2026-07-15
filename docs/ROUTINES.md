@@ -37,6 +37,28 @@ new machinery is the spawn/sweep step and routine CRUD.
   backfill). Per-routine `onMiss = 'carry'` opt-in for accumulating chores ("water plants"): the stale
   instance is rescheduled to today instead of swept.
 
+## 1.1 Revisions — 2026-07-14, post hands-on review (supersede conflicting text below)
+
+After playing with the built feature, the owner revised three decisions. Where the sections below
+conflict with these, **these win** (kept for history rather than rewritten):
+
+- **RV1 — Instance dates are locked.** Rescheduling a routine instance is blocked at the data
+  layer (`updateTask` rejects a changed `dueDate` when `routineId` is set; `bulkReschedule` skips
+  them with reason `routine_date_fixed`, which also covers agent tools). Edit dialog shows the
+  date read-only; board cards with a `routineId` aren't draggable. Same-date writes pass so board
+  reorders keep working. The spawner's "instance dated today **or later** exists" check stays as
+  a safety net (protects against duplicate spawns after e.g. a westward timezone change).
+- **RV2 — Always carry; `onMiss` removed (supersedes DR3).** An unfinished instance always rolls
+  forward to today — a routine never piles up and never silently disappears. The `on_miss` column
+  was dropped (migration `routines_always_carry`), the skip/carry option removed from the UI, and
+  the **missed-recap strip removed** (nothing is ever swept to `missed` in normal operation, so it
+  had nothing to show; `listTasks` no longer returns `missed` rows at all). `status = 'missed'`
+  survives only as an internal parking state: leftovers of **paused** routines (so they don't
+  follow the user around while paused) and rare carry collisions.
+- **RV3 — "Done yesterday but forgot to check it off"** is now simply completing the carried
+  instance: `completedAt` records when it was confirmed. No backfill flow needed; the planned R3
+  `backfill_missed` agent tool is dropped.
+
 ## 2. Product requirements
 
 ### Goals
@@ -70,11 +92,15 @@ new machinery is the spawn/sweep step and routine CRUD.
 - **Template vs instance edits:** editing a routine affects *future* instances only (today's
   already-spawned instance keeps its values). Editing one instance (any normal task edit) never
   touches the template.
-- **Rescheduling an instance to a future day = postpone.** The spawner treats "an instance dated
-  today **or later** exists" as satisfied, so nothing regenerates for today (or the gap days) and
-  the moved instance is that future day's instance. Daily spawning resumes the day after it.
-  (Without this, moving today's instance forward would immediately regenerate today's — a
-  duplicate.) Moving an instance to a *past* day just gets it swept to `missed` on the next load.
+- **Instances keep their date (decided 2026-07-14).** Each instance stands for a specific day —
+  that's the point of a routine — so rescheduling is blocked at the data layer (`updateTask`
+  rejects a changed `dueDate` on a `routineId` task; `bulkReschedule` skips them with reason
+  `routine_date_fixed`, which also covers the chat agent's tools). The UI mirrors this: the edit
+  dialog shows the date read-only and board cards with a `routineId` aren't draggable. Same-date
+  writes still pass so board reorders work. The spawner's "an instance dated today **or later**
+  exists" check remains as a safety net (e.g. a westward timezone change can leave a
+  future-dated instance; without the check it would duplicate). If you didn't do a day, the
+  answer is `missed` + backfill, not a date change.
 - **Pause** (`active = false`): no new instances; history remains; resumable.
 - **Delete routine:** completed/missed instances survive as history (`routineId` set NULL via
   `onDelete: SetNull`); today's still-active instance is deleted with it.

@@ -1,7 +1,6 @@
 "use client";
 
 import { QuickAdd } from "@/components/quick-add";
-import { RoutineRecap } from "@/components/routine-recap";
 import { TaskList } from "@/components/task-list";
 import { useTimezone } from "@/components/timezone-context";
 import { todayStr } from "@/lib/date";
@@ -34,8 +33,6 @@ export default function TodayPage() {
     <div className="mx-auto max-w-2xl p-6">
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Today</h1>
       <p className="text-muted-foreground mb-4 text-sm">{today}</p>
-
-      <RoutineRecap />
 
       <div className="overflow-hidden rounded-lg border">
         <QuickAdd
