@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { dbDateToStr, toDbDate } from "@/lib/date";
+import { addDays, dbDateToStr, toDbDate } from "@/lib/date";
 import type { TaskDTO } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 
@@ -13,6 +13,7 @@ type TaskRow = {
   status: string;
   order: number;
   projectId: string;
+  routineId: string | null;
   completedAt: Date | null;
   createdAt: Date;
 };
@@ -27,6 +28,7 @@ const SELECT = {
   status: true,
   order: true,
   projectId: true,
+  routineId: true,
   completedAt: true,
   createdAt: true,
 } as const;
@@ -39,9 +41,13 @@ function toDTO(t: TaskRow): TaskDTO {
     priority: t.priority,
     dueDate: dbDateToStr(t.dueDate),
     timeUsed: t.timeUsed,
-    status: t.status === "completed" ? "completed" : "active",
+    // 'missed' must pass through — coercing it to 'active' would resurrect
+    // swept routine instances in Today/overdue (docs/ROUTINES.md §3.3).
+    status:
+      t.status === "completed" || t.status === "missed" ? t.status : "active",
     order: t.order,
     projectId: t.projectId,
+    routineId: t.routineId,
     completedAt: t.completedAt ? t.completedAt.toISOString() : null,
     createdAt: t.createdAt.toISOString(),
   };
@@ -49,10 +55,15 @@ function toDTO(t: TaskRow): TaskDTO {
 
 /**
  * All active tasks plus recently-completed tasks (for the Completed view and
- * the per-view "show completed" toggle). Scoped to the user.
+ * the per-view "show completed" toggle). Scoped to the user. When `today`
+ * ('YYYY-MM-DD', user-local) is given, also includes the last two days'
+ * missed routine instances for the Today recap strip (docs/ROUTINES.md §3.3).
  */
-export async function listTasks(userId: string): Promise<TaskDTO[]> {
-  const [active, completed] = await Promise.all([
+export async function listTasks(
+  userId: string,
+  today?: string,
+): Promise<TaskDTO[]> {
+  const [active, completed, missed] = await Promise.all([
     prisma.task.findMany({
       where: { userId, status: "active" },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -64,8 +75,19 @@ export async function listTasks(userId: string): Promise<TaskDTO[]> {
       take: 200,
       select: SELECT,
     }),
+    today
+      ? prisma.task.findMany({
+          where: {
+            userId,
+            status: "missed",
+            dueDate: { gte: toDbDate(addDays(today, -2)) },
+          },
+          orderBy: { dueDate: "desc" },
+          select: SELECT,
+        })
+      : Promise.resolve([]),
   ]);
-  return [...active, ...completed].map(toDTO);
+  return [...active, ...completed, ...missed].map(toDTO);
 }
 
 export type CreateTaskInput = {

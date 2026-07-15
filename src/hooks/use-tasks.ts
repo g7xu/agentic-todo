@@ -65,6 +65,7 @@ export function useCreateTask() {
         status: "active",
         order: Number.MAX_SAFE_INTEGER,
         projectId: input.projectId ?? "",
+        routineId: null,
         completedAt: null,
         createdAt: new Date().toISOString(),
       };

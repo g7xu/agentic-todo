@@ -25,6 +25,7 @@ model Profile {
 
   projects      Project[]
   tasks         Task[]
+  routines      Routine[]
   conversations Conversation[]
   messages      Message[]
 
@@ -40,8 +41,9 @@ model Project {
   order     Float    @default(0)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user  Profile @relation(fields: [userId], references: [id])
-  tasks Task[]
+  user     Profile   @relation(fields: [userId], references: [id])
+  tasks    Task[]
+  routines Routine[]
 
   // Partial unique index "one Inbox per user" (WHERE is_inbox) is added via raw
   // SQL in the migration — Prisma can't express a partial unique index here.
@@ -57,19 +59,47 @@ model Task {
   description String?
   priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
   dueDate     DateTime? @map("due_date") @db.Date
-  status      String    @default("active") /// 'active' | 'completed'
+  status      String    @default("active") /// 'active' | 'completed' | 'missed'
+  routineId   String?   @map("routine_id") @db.Uuid /// set when this task is a materialized routine instance
   timeUsed    Int?      @map("time_used") /// minutes spent on the task ("HH:MM" in the UI)
   order       Float     @default(0)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6) /// maintained by Prisma, no DB trigger
 
-  user    Profile @relation(fields: [userId], references: [id])
-  project Project @relation(fields: [projectId], references: [id])
+  user    Profile  @relation(fields: [userId], references: [id])
+  project Project  @relation(fields: [projectId], references: [id])
+  routine Routine? @relation(fields: [routineId], references: [id], onDelete: SetNull)
 
+  // Idempotency guard for routine materialization: at most one instance per
+  // routine per day. NULLs are distinct in Postgres, so ordinary tasks
+  // (routineId NULL) never collide.
+  @@unique([routineId, dueDate])
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
   @@map("tasks")
+}
+
+/// A daily-recurring task template. Never shown in task lists; spawns one
+/// `Task` instance per local day via `materializeRoutines` (docs/ROUTINES.md).
+model Routine {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  content     String
+  description String?
+  priority    Int      @default(4) @db.SmallInt /// 1=p1 highest … 4=default
+  schedule    String   @default("daily") /// v1: literal 'daily' only (RRULE later)
+  onMiss      String   @default("skip") @map("on_miss") /// 'skip' | 'carry'
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    Profile @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  tasks   Task[]
+
+  @@index([userId, active])
+  @@map("routines")
 }
 
 /// v1 single thread per user (one row, @@unique([userId])). `title` reserved for v2.
