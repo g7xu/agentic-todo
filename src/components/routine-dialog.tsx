@@ -20,13 +20,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateRoutine, useUpdateRoutine } from "@/hooks/use-routines";
-import type { ProjectDTO, RoutineDTO } from "@/lib/types";
+import type { ProjectDTO, RoutineDTO, RoutineRepeatBase } from "@/lib/types";
 
 const PRIORITIES = [
   { value: "1", label: "P1 — Urgent" },
   { value: "2", label: "P2 — High" },
   { value: "3", label: "P3 — Medium" },
   { value: "4", label: "P4 — None" },
+];
+
+const REPEAT_BASE = [
+  { value: "scheduled", label: "Scheduled date" },
+  { value: "completed", label: "Completed date" },
 ];
 
 /** Create (no `routine`) or edit (with `routine`) a daily routine template.
@@ -52,14 +57,32 @@ export function RoutineDialog({
   const [projectId, setProjectId] = useState(
     routine?.projectId ?? inbox?.id ?? "",
   );
+  const [repeatBase, setRepeatBase] = useState<RoutineRepeatBase>(
+    routine?.repeatBase ?? "scheduled",
+  );
+  const [repeatEvery, setRepeatEvery] = useState(
+    String(routine?.repeatEvery ?? 1),
+  );
+  const [endsMode, setEndsMode] = useState<"never" | "on">(
+    routine?.endDate ? "on" : "never",
+  );
+  const [endDate, setEndDate] = useState(routine?.endDate ?? "");
+
+  const everyNum = Number(repeatEvery);
+  const everyInvalid =
+    !Number.isInteger(everyNum) || everyNum < 1 || everyNum > 365;
+  const endsInvalid = endsMode === "on" && !endDate;
 
   function save() {
-    if (!content.trim()) return;
+    if (!content.trim() || everyInvalid || endsInvalid) return;
     const common = {
       content: content.trim(),
       description: description.trim() ? description.trim() : null,
       priority: Number(priority),
       projectId,
+      repeatEvery: everyNum,
+      repeatBase,
+      endDate: endsMode === "on" ? endDate : null,
     };
     if (routine) {
       update.mutate({ id: routine.id, input: common });
@@ -129,6 +152,73 @@ export function RoutineDialog({
               </Select>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Repeat based on</Label>
+              <Select
+                value={repeatBase}
+                onValueChange={(v) => setRepeatBase(v as RoutineRepeatBase)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REPEAT_BASE.map((b) => (
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="repeat-every">Every</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="repeat-every"
+                  type="number"
+                  min={1}
+                  max={365}
+                  className="w-20"
+                  aria-invalid={everyInvalid || undefined}
+                  value={repeatEvery}
+                  onChange={(e) => setRepeatEvery(e.target.value)}
+                />
+                <span className="text-muted-foreground text-sm">
+                  {everyNum === 1 ? "day" : "days"}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Ends</Label>
+              <Select
+                value={endsMode}
+                onValueChange={(v) => setEndsMode(v as "never" | "on")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="never">Never</SelectItem>
+                  <SelectItem value="on">On date (inclusive)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {endsMode === "on" && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="ends-on">End date</Label>
+                <Input
+                  id="ends-on"
+                  type="date"
+                  aria-invalid={endsInvalid || undefined}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
           <p className="text-muted-foreground text-xs">
             An unfinished routine task carries over to the next day.
           </p>
@@ -143,7 +233,10 @@ export function RoutineDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={!content.trim()}>
+          <Button
+            onClick={save}
+            disabled={!content.trim() || everyInvalid || endsInvalid}
+          >
             {routine ? "Save" : "Create"}
           </Button>
         </DialogFooter>

@@ -43,6 +43,19 @@ const PRIORITY_COLOR: Record<number, string> = {
   4: "",
 };
 
+function cadenceLabel(r: RoutineDTO): string {
+  const every =
+    r.repeatEvery === 1 ? "Every day" : `Every ${r.repeatEvery} days`;
+  const base = r.repeatBase === "completed" ? " · after completion" : "";
+  const ends = r.endDate
+    ? ` · until ${new Date(`${r.endDate}T00:00:00Z`).toLocaleDateString(
+        "en-US",
+        { month: "short", day: "numeric", timeZone: "UTC" },
+      )}`
+    : "";
+  return every + base + ends;
+}
+
 export default function RoutinesPage() {
   const { data: routines = [], isLoading, isError, refetch } = useRoutines();
   const { data: projects = [] } = useProjects();
@@ -62,8 +75,7 @@ export default function RoutinesPage() {
         </Button>
       </div>
       <p className="text-muted-foreground mb-4 text-sm">
-        Tasks that repeat every day. Each morning an instance shows up in
-        Today.
+        Repeating tasks. Each occurrence shows up in Today on its day.
       </p>
 
       <div className="overflow-hidden rounded-lg border">
@@ -112,7 +124,7 @@ export default function RoutinesPage() {
                   {!r.active && " (paused)"}
                 </span>
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                  <span>Daily</span>
+                  <span>{cadenceLabel(r)}</span>
                   {project && !project.isInbox && <span># {project.name}</span>}
                 </div>
               </div>

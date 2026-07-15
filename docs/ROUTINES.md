@@ -291,7 +291,7 @@ calls are rate-limited/fan-out-guarded like existing tools.
 
 ---
 
-## 4.1 Custom repeat (proposed 2026-07-14 — awaiting owner go)
+## 4.1 Custom repeat (implemented 2026-07-14)
 
 Replace the fixed daily cadence with a Things-style custom repeat. Controls: **Based on**
 (scheduled date | completed date), **Every** N days (unit column ready for week/month later),
