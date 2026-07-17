@@ -315,7 +315,37 @@ Replace the fixed daily cadence with a Things-style custom repeat. Controls: **B
 - **Phases:** CR1 schema + engine + data layer + test-suite extension (cadence grid,
   completed-shift, end date, carry across gaps); CR2 dialog Repeat block + routines-page cadence
   summary ("Every 3 days · after completion · until Aug 1") + browser verify.
-- **Deferred:** week/month units (weekday picking, month-end rules), time-of-day.
+- **Deferred:** time-of-day.
+
+## 4.2 Repeat units (implemented 2026-07-16, CR3)
+
+The `Every` row gains a unit dropdown — **Day | Week | Weekday | Month | Year** — and, for a
+scheduled-based `Week`, an **On** row of weekday checkboxes (Todoist-style). All cadence rules live
+in `src/lib/repeat.ts` (pure, over 'YYYY-MM-DD' strings) and are shared by the engine and dialog;
+`materializeRoutines` just asks `isDueOn(routine, today, lastCompletionDay)`.
+
+- **Schema:** one column, `repeatWeekdays Int[] @default([])` (0=Sun … 6=Sat), migration
+  `routine_repeat_units`. `repeatUnit` already existed. Existing rows are every-1-day/scheduled —
+  unchanged.
+- **Scheduled-based rules:** `day` = `(today−startDate) % N === 0`. `week` = weeks counted from the
+  **Sunday of the anchor's week** (so the anchor week is week 0), `% N === 0`, and today's weekday is
+  ticked. `weekday` = any Mon-Fri. `month` = `monthsBetween % N === 0` and day-of-month matches the
+  anchor's, **clamped** to the month's last day. `year` = same, plus month match.
+- **Completed-based rules:** next due = last completion's local day + N units (`week` = N×7 days;
+  `month`/`year` clamp the same way). No completion yet → due from `startDate`.
+- **Owner decisions (2026-07-16):**
+  - **Weekday pins N to 1** (Todoist-style "every weekday" = Mon-Fri). The number box disables when
+    the unit is Weekday; `MAX_EVERY` encodes it alongside the other per-unit bounds.
+  - **Month-end clamps, never skips** (Jan 31 → Feb 28/29, Apr 30). Things/Reminders behavior: a
+    monthly routine never silently vanishes for a month. Feb 29 yearly → Feb 28 in common years, so
+    there is always exactly one occurrence per period.
+  - **Completed-based hides the On row.** "N weeks after I finish it" contradicts a weekday list, so
+    weekdays are cleared on write rather than half-honored.
+- **Canonical writes:** `normalizeRepeat` runs on every create/update (and will cover the R3 agent
+  tools), so stored rows never carry irrelevant fields — the engine never has to second-guess them.
+  An empty weekday list falls back to the anchor's own weekday.
+- **Deferred:** month "on the Nth weekday" (e.g. 3rd Tuesday), day-of-month picker independent of
+  the anchor, time-of-day.
 
 ## 5. Deferred (v2 candidates)
 

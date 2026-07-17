@@ -5,7 +5,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { RoutineDTO, RoutineRepeatBase } from "@/lib/types";
+import { toast } from "sonner";
+import type {
+  RoutineDTO,
+  RoutineRepeatBase,
+  RoutineRepeatUnit,
+} from "@/lib/types";
 import {
   createRoutineAction,
   deleteRoutineAction,
@@ -32,6 +37,8 @@ export type CreateRoutineInput = {
   priority?: number;
   projectId?: string | null;
   repeatEvery?: number;
+  repeatUnit?: RoutineRepeatUnit;
+  repeatWeekdays?: number[];
   repeatBase?: RoutineRepeatBase;
   endDate?: string | null;
 };
@@ -42,6 +49,8 @@ export type UpdateRoutineInput = {
   priority?: number;
   projectId?: string;
   repeatEvery?: number;
+  repeatUnit?: RoutineRepeatUnit;
+  repeatWeekdays?: number[];
   repeatBase?: RoutineRepeatBase;
   endDate?: string | null;
   active?: boolean;
@@ -58,10 +67,21 @@ function useInvalidateBoth() {
   };
 }
 
+/** Routine writes are not optimistic, so a failure leaves no wrong state to roll
+ * back — but it must still be visible. Without this the dialog closes on a
+ * rejected write and the routine silently never exists. */
+function reportError(message: string) {
+  return (e: unknown) => {
+    console.error(`${message}:`, e);
+    toast.error(message);
+  };
+}
+
 export function useCreateRoutine() {
   const invalidate = useInvalidateBoth();
   return useMutation({
     mutationFn: (input: CreateRoutineInput) => createRoutineAction(input),
+    onError: reportError("Couldn’t create the routine"),
     onSettled: invalidate,
   });
 }
@@ -71,6 +91,7 @@ export function useUpdateRoutine() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateRoutineInput }) =>
       updateRoutineAction(id, input),
+    onError: reportError("Couldn’t save the routine"),
     onSettled: invalidate,
   });
 }
@@ -79,6 +100,7 @@ export function useDeleteRoutine() {
   const invalidate = useInvalidateBoth();
   return useMutation({
     mutationFn: (id: string) => deleteRoutineAction(id),
+    onError: reportError("Couldn’t delete the routine"),
     onSettled: invalidate,
   });
 }

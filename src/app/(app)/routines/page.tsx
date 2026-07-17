@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RoutineDialog } from "@/components/routine-dialog";
+import { cadenceLabel } from "@/lib/repeat";
 import {
   useDeleteRoutine,
   useRoutines,
@@ -42,19 +43,6 @@ const PRIORITY_COLOR: Record<number, string> = {
   3: "text-blue-500",
   4: "",
 };
-
-function cadenceLabel(r: RoutineDTO): string {
-  const every =
-    r.repeatEvery === 1 ? "Every day" : `Every ${r.repeatEvery} days`;
-  const base = r.repeatBase === "completed" ? " · after completion" : "";
-  const ends = r.endDate
-    ? ` · until ${new Date(`${r.endDate}T00:00:00Z`).toLocaleDateString(
-        "en-US",
-        { month: "short", day: "numeric", timeZone: "UTC" },
-      )}`
-    : "";
-  return every + base + ends;
-}
 
 export default function RoutinesPage() {
   const { data: routines = [], isLoading, isError, refetch } = useRoutines();

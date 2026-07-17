@@ -89,8 +89,9 @@ model Routine {
   content     String
   description String?
   priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
-  repeatEvery Int       @default(1) @map("repeat_every") /// every N units
-  repeatUnit  String    @default("day") @map("repeat_unit") /// 'day' (week/month later)
+  repeatEvery Int       @default(1) @map("repeat_every") /// every N units; always 1 when unit is 'weekday'
+  repeatUnit  String    @default("day") @map("repeat_unit") /// 'day' | 'week' | 'weekday' | 'month' | 'year'
+  repeatWeekdays Int[]  @default([]) @map("repeat_weekdays") /// 0=Sun … 6=Sat; scheduled-based 'week' unit only, else empty
   repeatBase  String    @default("scheduled") @map("repeat_base") /// 'scheduled' | 'completed'
   startDate   DateTime  @default(dbgenerated("CURRENT_DATE")) @map("start_date") @db.Date /// grid anchor; app sets user-local creation day
   endDate     DateTime? @map("end_date") @db.Date /// last day new instances spawn (inclusive); null = never

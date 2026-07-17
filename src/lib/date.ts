@@ -47,6 +47,52 @@ export function addDays(dateStr: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Day of week of a 'YYYY-MM-DD' string: 0=Sunday … 6=Saturday. */
+export function weekdayOf(dateStr: string): number {
+  return new Date(`${dateStr}T00:00:00.000Z`).getUTCDay();
+}
+
+/** The Sunday starting the week that contains `dateStr`. */
+export function startOfWeek(dateStr: string): string {
+  return addDays(dateStr, -weekdayOf(dateStr));
+}
+
+/** Day of month (1-31) of a 'YYYY-MM-DD' string. */
+export function dayOfMonth(dateStr: string): number {
+  return Number(dateStr.slice(8, 10));
+}
+
+/** Whole months from `a` to `b` ('YYYY-MM-DD'), ignoring day of month. */
+export function diffMonths(a: string, b: string): number {
+  const years = Number(b.slice(0, 4)) - Number(a.slice(0, 4));
+  return years * 12 + (Number(b.slice(5, 7)) - Number(a.slice(5, 7)));
+}
+
+/** Number of days in the given month (`month` is 1-12). */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Add `n` months to a 'YYYY-MM-DD' string, clamping the day to the last day of
+ * the target month when it would overflow (Jan 31 + 1 month → Feb 28/29), per
+ * docs/ROUTINES.md §4.2. Never rolls into the following month. `n` may be
+ * negative.
+ */
+export function addMonthsClamped(dateStr: string, n: number): string {
+  const year = Number(dateStr.slice(0, 4));
+  const month = Number(dateStr.slice(5, 7));
+  const day = dayOfMonth(dateStr);
+  // Months-since-year-0 makes the arithmetic plain addition. Deriving the month
+  // with `%` alone would go negative for negative `n` (JS keeps the sign), so
+  // take it back out of the floored year instead.
+  const total = year * 12 + (month - 1) + n;
+  const targetYear = Math.floor(total / 12);
+  const targetMonth = total - targetYear * 12 + 1;
+  const clamped = Math.min(day, daysInMonth(targetYear, targetMonth));
+  return `${String(targetYear).padStart(4, "0")}-${String(targetMonth).padStart(2, "0")}-${String(clamped).padStart(2, "0")}`;
+}
+
 export function isValidTimeZone(tz: string): boolean {
   if (!tz) return false;
   try {

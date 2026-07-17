@@ -22,6 +22,8 @@ export type TaskDTO = {
 
 export type RoutineRepeatBase = "scheduled" | "completed";
 
+export type RoutineRepeatUnit = "day" | "week" | "weekday" | "month" | "year";
+
 /** Client-facing routine (recurring task template) shape. An unfinished
  * instance always carries forward to the next day, whatever the cadence. */
 export type RoutineDTO = {
@@ -31,7 +33,8 @@ export type RoutineDTO = {
   priority: number; // 1=p1 (highest) … 4=default
   projectId: string;
   repeatEvery: number; // every N units
-  repeatUnit: string; // 'day' (week/month later)
+  repeatUnit: RoutineRepeatUnit;
+  repeatWeekdays: number[]; // 0=Sun … 6=Sat; 'week' unit only, else empty
   repeatBase: RoutineRepeatBase;
   startDate: string; // 'YYYY-MM-DD' grid anchor (user-local creation day)
   endDate: string | null; // last day new instances spawn (inclusive)

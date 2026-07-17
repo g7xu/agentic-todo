@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/db";
-import { dateStrInTz, dbDateToStr, diffDays, toDbDate, todayStr } from "@/lib/date";
-import type { RoutineDTO, RoutineRepeatBase } from "@/lib/types";
+import { dateStrInTz, dbDateToStr, toDbDate, todayStr } from "@/lib/date";
+import { isDueOn, isRepeatUnit, normalizeRepeat } from "@/lib/repeat";
+import type {
+  RoutineDTO,
+  RoutineRepeatBase,
+  RoutineRepeatUnit,
+} from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 
 type RoutineRow = {
@@ -11,6 +16,7 @@ type RoutineRow = {
   projectId: string;
   repeatEvery: number;
   repeatUnit: string;
+  repeatWeekdays: number[];
   repeatBase: string;
   startDate: Date;
   endDate: Date | null;
@@ -26,6 +32,7 @@ const SELECT = {
   projectId: true,
   repeatEvery: true,
   repeatUnit: true,
+  repeatWeekdays: true,
   repeatBase: true,
   startDate: true,
   endDate: true,
@@ -41,7 +48,8 @@ function toDTO(r: RoutineRow): RoutineDTO {
     priority: r.priority,
     projectId: r.projectId,
     repeatEvery: r.repeatEvery,
-    repeatUnit: r.repeatUnit,
+    repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
+    repeatWeekdays: r.repeatWeekdays,
     repeatBase: r.repeatBase === "completed" ? "completed" : "scheduled",
     startDate: dbDateToStr(r.startDate)!,
     endDate: dbDateToStr(r.endDate),
@@ -65,6 +73,8 @@ export type CreateRoutineInput = {
   priority?: number;
   projectId?: string | null;
   repeatEvery?: number;
+  repeatUnit?: RoutineRepeatUnit;
+  repeatWeekdays?: number[];
   repeatBase?: RoutineRepeatBase;
   endDate?: string | null;
 };
@@ -90,6 +100,16 @@ export async function createRoutine(
   });
   const startDate = todayStr(profile?.timezone ?? "UTC");
 
+  const repeat = normalizeRepeat(
+    {
+      repeatEvery: input.repeatEvery ?? 1,
+      repeatUnit: input.repeatUnit ?? "day",
+      repeatWeekdays: input.repeatWeekdays ?? [],
+      repeatBase: input.repeatBase ?? "scheduled",
+    },
+    startDate,
+  );
+
   const r = await prisma.routine.create({
     data: {
       userId,
@@ -97,8 +117,7 @@ export async function createRoutine(
       content: input.content,
       description: input.description ?? null,
       priority: input.priority ?? 4,
-      repeatEvery: input.repeatEvery ?? 1,
-      repeatBase: input.repeatBase ?? "scheduled",
+      ...repeat,
       startDate: toDbDate(startDate),
       endDate: input.endDate ? toDbDate(input.endDate) : null,
     },
@@ -113,6 +132,8 @@ export type UpdateRoutineInput = {
   priority?: number;
   projectId?: string;
   repeatEvery?: number;
+  repeatUnit?: RoutineRepeatUnit;
+  repeatWeekdays?: number[];
   repeatBase?: RoutineRepeatBase;
   endDate?: string | null;
   active?: boolean;
@@ -126,7 +147,13 @@ export async function updateRoutine(
 ): Promise<RoutineDTO> {
   const existing = await prisma.routine.findFirst({
     where: { id, userId },
-    select: { id: true },
+    select: {
+      repeatEvery: true,
+      repeatUnit: true,
+      repeatWeekdays: true,
+      repeatBase: true,
+      startDate: true,
+    },
   });
   if (!existing) throw new Error("Routine not found");
 
@@ -139,12 +166,37 @@ export async function updateRoutine(
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
   if (input.projectId !== undefined) data.projectId = input.projectId;
-  if (input.repeatEvery !== undefined) data.repeatEvery = input.repeatEvery;
-  if (input.repeatBase !== undefined) data.repeatBase = input.repeatBase;
   if (input.endDate !== undefined) {
     data.endDate = input.endDate ? toDbDate(input.endDate) : null;
   }
   if (input.active !== undefined) data.active = input.active;
+
+  // Repeat fields normalize as a set: switching unit alone (say day → weekday)
+  // has to re-canonicalize `repeatEvery`/`repeatWeekdays` against what is
+  // already stored, so merge the patch over the row before normalizing.
+  const touchesRepeat =
+    input.repeatEvery !== undefined ||
+    input.repeatUnit !== undefined ||
+    input.repeatWeekdays !== undefined ||
+    input.repeatBase !== undefined;
+  if (touchesRepeat) {
+    Object.assign(
+      data,
+      normalizeRepeat(
+        {
+          repeatEvery: input.repeatEvery ?? existing.repeatEvery,
+          repeatUnit:
+            input.repeatUnit ??
+            (isRepeatUnit(existing.repeatUnit) ? existing.repeatUnit : "day"),
+          repeatWeekdays: input.repeatWeekdays ?? existing.repeatWeekdays,
+          repeatBase:
+            input.repeatBase ??
+            (existing.repeatBase === "completed" ? "completed" : "scheduled"),
+        },
+        dbDateToStr(existing.startDate)!,
+      ),
+    );
+  }
 
   const r = await prisma.routine.update({ where: { id }, data, select: SELECT });
   return toDTO(r);
@@ -262,6 +314,8 @@ export async function materializeRoutines(
       description: true,
       priority: true,
       repeatEvery: true,
+      repeatUnit: true,
+      repeatWeekdays: true,
       repeatBase: true,
       startDate: true,
       endDate: true,
@@ -305,17 +359,20 @@ export async function materializeRoutines(
       .map((g) => [g.routineId, dateStrInTz(g._max.completedAt!, tz)]),
   );
 
-  const need = candidates.filter((r) => {
-    const endDate = dbDateToStr(r.endDate);
-    if (endDate && today > endDate) return false;
-    if (r.repeatBase === "completed") {
-      const last = lastCompletionDay.get(r.id);
-      if (!last) return today >= dbDateToStr(r.startDate)!;
-      return diffDays(last, today) >= r.repeatEvery;
-    }
-    const sinceStart = diffDays(dbDateToStr(r.startDate)!, today);
-    return sinceStart >= 0 && sinceStart % r.repeatEvery === 0;
-  });
+  const need = candidates.filter((r) =>
+    isDueOn(
+      {
+        repeatEvery: r.repeatEvery,
+        repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
+        repeatWeekdays: r.repeatWeekdays,
+        repeatBase: r.repeatBase === "completed" ? "completed" : "scheduled",
+        startDate: dbDateToStr(r.startDate)!,
+        endDate: dbDateToStr(r.endDate),
+      },
+      today,
+      lastCompletionDay.get(r.id) ?? null,
+    ),
+  );
   if (need.length === 0) return;
 
   // Append relative to each target project's list (TDD §5).
