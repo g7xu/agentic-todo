@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Flag, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Clock, Flag, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -99,6 +99,7 @@ export function TaskRow({
         </span>
         {(task.dueDate ||
           task.timeUsed !== null ||
+          task.routineId ||
           (showProject && project && !project.isInbox)) && (
           <div className="flex items-center gap-2 text-xs">
             {task.dueDate && (
@@ -110,6 +111,14 @@ export function TaskRow({
               <span className="text-muted-foreground flex items-center gap-0.5">
                 <Clock className="size-3" />
                 {minutesToHHMM(task.timeUsed)}
+              </span>
+            )}
+            {task.routineId && (
+              <span
+                className="text-muted-foreground flex items-center gap-0.5"
+                title="Daily routine"
+              >
+                <Repeat className="size-3" />
               </span>
             )}
             {showProject && project && !project.isInbox && (

@@ -242,13 +242,20 @@ function SortableTask({
   projects: ProjectDTO[];
   showDue?: boolean;
 }) {
+  // Routine instances keep their date, so they can't be dragged to another
+  // column (the server rejects the move anyway; docs/ROUTINES.md §2).
+  const dragDisabled = task.id.startsWith("temp-") || task.routineId !== null;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id, disabled: task.id.startsWith("temp-") });
+    useSortable({ id: task.id, disabled: dragDisabled });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("cursor-grab touch-none", isDragging && "opacity-40")}
+      className={cn(
+        dragDisabled ? "cursor-pointer" : "cursor-grab",
+        "touch-none",
+        isDragging && "opacity-40",
+      )}
       {...attributes}
       {...listeners}
     >

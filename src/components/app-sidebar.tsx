@@ -11,6 +11,7 @@ import {
   Inbox,
   MoreHorizontal,
   Plus,
+  Repeat,
   Settings,
   Trash2,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/upcoming", label: "Upcoming", icon: CalendarClock },
   { href: "/completed", label: "Completed", icon: CheckCircle2 },
+  { href: "/routines", label: "Routines", icon: Repeat },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
