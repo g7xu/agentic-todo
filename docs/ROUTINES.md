@@ -55,6 +55,43 @@ conflict with these, **these win** (kept for history rather than rewritten):
   had nothing to show; `listTasks` no longer returns `missed` rows at all). `status = 'missed'`
   survives only as an internal parking state: leftovers of **paused** routines (so they don't
   follow the user around while paused) and rare carry collisions.
+- **RV9 — History is correctable, and gaps are backfilled (2026-07-18).** Two halves that only make
+  sense together, shipped in that order.
+
+  **Phase A — correction.** Clicking an Activity cell changes what that day says: `missed` ↔ `done`,
+  and a day with no row at all becomes `done`. `setRoutineDay` is deliberately looser than
+  `completeOccurrence` (§RV6), which creates *future* work and so must refuse anything off-cadence:
+  paused routines are allowed (pausing shouldn't freeze history) and completed-based routines are
+  allowed on days that already have a row (their cadence isn't computable, so there is nothing else
+  to validate a bare date against). A day with no row is only minted when the cadence covers it.
+  Undo restores the exact prior state including **`clear`**, which deletes the row: undoing "I did
+  do that day" on a day that had no record must leave *no record*, not a fabricated `missed` — a
+  different claim than the one we started with. `clear` only ever removes a routine instance
+  already carrying a verdict, never live work.
+
+  **Phase B — backfill.** `materializeRoutines` gained a step between retire and spawn: due days
+  with no row at all get a `missed` record, so the grid isn't full of `no record` holes (§RV8) and
+  stats stop under-reporting. Records only — retire already minted the single catch-up task, and a
+  fortnight's absence must not produce a fortnight of tasks.
+
+  Backfill **infers** a miss it never observed, so it is bounded at both ends. `BACKFILL_EPOCH` is
+  a hard floor at the ship date, not a rolling window: `Routine` stores only whether a routine is
+  active *now*, with no record of when it was paused, so walking backwards would invent weeks of
+  failure for routines deliberately switched off. `BACKFILL_MAX_DAYS` (30) caps the look-back so
+  one long absence can't write hundreds of rows in a single page load. Completed-based routines are
+  excluded — no computable grid, so no gaps to find. **Phase A shipping first is the point:** the
+  fix for a wrong assertion must exist before the first one is written.
+
+  **Known limit.** The pause hole is bounded, not closed. Pause a routine for two weeks *after* the
+  epoch and backfill still writes fourteen misses on resume. Properly fixing it needs pause history
+  (a `RoutineEvent` table); deferred until it actually bites.
+
+  **Verified 2026-07-18** by temporarily lowering the epoch and driving a real materialize: exactly
+  one gap was filled (the one Tuesday with no row), nothing before the epoch, nothing for today,
+  nothing for a routine whose `startDate` post-dated the gap. Epoch restored and the fabricated row
+  deleted afterwards. All three correction paths were driven in the browser, including
+  `no record → done → undo`, which correctly deleted the row rather than leaving a `missed`.
+
 - **RV8 — The Activity grid replaces the Completed page (2026-07-18).** RV7 phase 3. A
   contribution-style grid at `/activity`: an aggregate strip (share of each day's due routines
   completed) over per-routine rows sharing the same columns, so scanning a column reads one day

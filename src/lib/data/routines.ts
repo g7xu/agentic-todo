@@ -1,12 +1,40 @@
 import { prisma } from "@/lib/db";
-import { dateStrInTz, dbDateToStr, toDbDate, todayStr } from "@/lib/date";
-import { isDueOn, isRepeatUnit, normalizeRepeat } from "@/lib/repeat";
+import {
+  addDays,
+  dateStrInTz,
+  dbDateToStr,
+  toDbDate,
+  todayStr,
+} from "@/lib/date";
+import {
+  isDueOn,
+  isRepeatUnit,
+  normalizeRepeat,
+  occurrencesBetween,
+} from "@/lib/repeat";
+
 import type {
   RoutineDTO,
   RoutineRepeatBase,
   RoutineRepeatUnit,
 } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
+
+/**
+ * Backfill never writes history before this day (docs/ROUTINES.md §RV9).
+ *
+ * It is the day the feature shipped, and it is a hard floor rather than a
+ * rolling window on purpose: backfill records misses it never observed, and
+ * `Routine` stores only whether a routine is active *now*, with no history of
+ * when it was paused. Walking backwards past this date would invent weeks of
+ * failure for routines that had been deliberately switched off. Raising it is
+ * safe; lowering it fabricates history.
+ */
+const BACKFILL_EPOCH = "2026-07-18";
+
+/** Also cap the look-back, so returning from a long absence can't write
+ * hundreds of rows inside one page load. */
+const BACKFILL_MAX_DAYS = 30;
 
 type RoutineRow = {
   id: string;
@@ -484,7 +512,7 @@ export async function deleteRoutine(userId: string, id: string): Promise<void> {
  * knows routines recur. Idempotent and user-scoped; called from the tasks
  * read path with `today = todayStr(profile.timezone)` and the profile tz
  * (needed to turn `completedAt` timestamps into local calendar days).
- * Retire → spawn:
+ * Retire → backfill → spawn:
  *
  *  1. retire: an unfinished instance whose day has passed is set to 'missed'
  *             with its dueDate FROZEN on its own day — that frozen date is the
@@ -496,7 +524,12 @@ export async function deleteRoutine(userId: string, id: string): Promise<void> {
  *             and so no date lock (§RV1). At most one outstanding catch-up per
  *             routine, so a week of ignored days is 7 records but 1 task.
  *             Paused routines are recorded but mint nothing.
- *  2. spawn:  one instance per active routine that is DUE today and lacks an
+ *  2. backfill: due days with no row at all — the app was never opened on
+ *             them — get a 'missed' record, so the Activity grid isn't full of
+ *             holes and stats don't under-report. Bounded at both ends
+ *             (BACKFILL_EPOCH, BACKFILL_MAX_DAYS) because it infers rather
+ *             than observes; every row is user-correctable (§RV9).
+ *  3. spawn:  one instance per active routine that is DUE today and lacks an
  *             instance dated today or later (any status). Due today means:
  *             - scheduled-based: today is on the startDate + k·repeatEvery
  *               grid (late completion never shifts the grid);
@@ -615,13 +648,6 @@ export async function materializeRoutines(
     }
   }
 
-  // 2. Spawn instances for active, due-today routines that don't have one
-  // dated today OR LATER, in any status. A completed today-instance must not
-  // respawn, and nor must one completed ahead of time (§RV6). The gte check
-  // also keeps this safe for future-dated instances (e.g. after a westward
-  // timezone change). Retired instances above are all dated BEFORE today, so
-  // they never suppress today's spawn — that is what gives the user a fresh
-  // task today alongside the overdue catch-up (§RV7).
   const routines = await prisma.routine.findMany({
     where: { userId, active: true },
     select: {
@@ -640,6 +666,90 @@ export async function materializeRoutines(
   });
   if (routines.length === 0) return;
 
+  // 2. Backfill: days the cadence covered that have NO row at all, because
+  // materialization only runs when the app is opened (DR2). Without this the
+  // Activity grid is full of 'no record' holes (§RV8) and any stat computed
+  // from it under-reports. Records only — RV7's retire already minted the one
+  // catch-up task, and a fortnight's absence must not produce a fortnight of
+  // tasks.
+  //
+  // Backfill INFERS a miss it never observed, which is why it is bounded hard
+  // at both ends:
+  //  - never before BACKFILL_EPOCH, so it cannot rewrite the past. We keep no
+  //    pause history, so walking backwards would fabricate weeks of failure
+  //    for routines that were deliberately switched off (§RV9).
+  //  - never more than BACKFILL_MAX_DAYS back, so one long absence cannot dump
+  //    hundreds of rows into a single request.
+  // Every row it writes is correctable by the user (§RV9 phase A), which is
+  // what makes inferring acceptable at all.
+  const backfillFrom =
+    BACKFILL_EPOCH > addDays(today, -BACKFILL_MAX_DAYS)
+      ? BACKFILL_EPOCH
+      : addDays(today, -BACKFILL_MAX_DAYS);
+  const yesterday = addDays(today, -1);
+  // Completed-based routines are excluded: their cadence measures from the
+  // last completion, so there is no grid of due days to find gaps in.
+  const scheduled = routines.filter((r) => r.repeatBase !== "completed");
+
+  if (backfillFrom <= yesterday && scheduled.length > 0) {
+    const known = await prisma.task.findMany({
+      where: {
+        userId,
+        routineId: { in: scheduled.map((r) => r.id) },
+        dueDate: { gte: toDbDate(backfillFrom), lte: toDbDate(yesterday) },
+      },
+      select: { routineId: true, dueDate: true },
+    });
+    const have = new Set(
+      known.map((k) => `${k.routineId}|${dbDateToStr(k.dueDate)}`),
+    );
+
+    const gaps: { routine: (typeof scheduled)[number]; date: string }[] = [];
+    for (const r of scheduled) {
+      const days = occurrencesBetween(
+        {
+          repeatEvery: r.repeatEvery,
+          repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
+          repeatWeekdays: r.repeatWeekdays,
+          repeatBase: "scheduled",
+          startDate: dbDateToStr(r.startDate)!,
+          endDate: dbDateToStr(r.endDate),
+        },
+        backfillFrom,
+        yesterday,
+      );
+      for (const d of days) {
+        if (!have.has(`${r.id}|${d}`)) gaps.push({ routine: r, date: d });
+      }
+    }
+
+    if (gaps.length > 0) {
+      await prisma.task.createMany({
+        data: gaps.map(({ routine, date }) => ({
+          userId,
+          projectId: routine.projectId,
+          routineId: routine.id,
+          content: routine.content,
+          description: routine.description,
+          priority: routine.priority,
+          dueDate: toDbDate(date),
+          status: "missed",
+          // 'missed' rows never appear in an ordered list, so they skip the
+          // per-project order lookup the spawn step needs.
+          order: 0,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  // 3. Spawn instances for active, due-today routines that don't have one
+  // dated today OR LATER, in any status. A completed today-instance must not
+  // respawn, and nor must one completed ahead of time (§RV6). The gte check
+  // also keeps this safe for future-dated instances (e.g. after a westward
+  // timezone change). Retired and backfilled rows above are all dated BEFORE
+  // today, so they never suppress today's spawn — that is what gives the user
+  // a fresh task today alongside the overdue catch-up (§RV7).
   const existing = await prisma.task.findMany({
     where: {
       userId,
