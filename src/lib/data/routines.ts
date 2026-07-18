@@ -67,6 +67,46 @@ export async function listRoutines(userId: string): Promise<RoutineDTO[]> {
   return rows.map(toDTO);
 }
 
+/** One real thing that happened to a routine on one day (docs/ROUTINES.md §RV8). */
+export type RoutineDayDTO = {
+  routineId: string;
+  date: string;
+  status: "completed" | "missed";
+};
+
+/**
+ * Every recorded routine instance in `[from, to]` — the Activity grid's only
+ * data source (§RV8). Deliberately NOT `listTasks`: that caps completed rows
+ * at 200 and drops 'missed' entirely, both fatal for a history view.
+ *
+ * Returns only what actually happened. It does NOT say which days were *due* —
+ * the client derives that from the cadence with `occurrencesBetween`, the same
+ * function the spawner uses (§RV5), so a grid cell and a real instance can
+ * never disagree about whether a day counted. A due day with no row here is
+ * genuinely unknown ("no record"), not a miss, and the grid draws it that way.
+ */
+export async function listRoutineHistory(
+  userId: string,
+  from: string,
+  to: string,
+): Promise<RoutineDayDTO[]> {
+  const rows = await prisma.task.findMany({
+    where: {
+      userId,
+      routineId: { not: null },
+      status: { in: ["completed", "missed"] },
+      dueDate: { gte: toDbDate(from), lte: toDbDate(to) },
+    },
+    orderBy: { dueDate: "asc" },
+    select: { routineId: true, dueDate: true, status: true },
+  });
+  return rows.map((r) => ({
+    routineId: r.routineId!,
+    date: dbDateToStr(r.dueDate)!,
+    status: r.status === "completed" ? "completed" : "missed",
+  }));
+}
+
 export type CreateRoutineInput = {
   content: string;
   description?: string | null;

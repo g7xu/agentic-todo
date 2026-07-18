@@ -32,6 +32,27 @@ export function useRoutines() {
   return useQuery({ queryKey: ROUTINES_KEY, queryFn: fetchRoutines });
 }
 
+export type RoutineDay = {
+  routineId: string;
+  date: string;
+  status: "completed" | "missed";
+};
+
+export type RoutineHistory = { from: string; to: string; days: RoutineDay[] };
+
+/** Recorded routine instances for the Activity grid (docs/ROUTINES.md §RV8).
+ * Keyed by window length so switching 12 weeks ↔ a year caches both. */
+export function useRoutineHistory(days: number) {
+  return useQuery({
+    queryKey: [...ROUTINES_KEY, "history", days] as const,
+    queryFn: async (): Promise<RoutineHistory> => {
+      const res = await fetch(`/api/routines/history?days=${days}`);
+      if (!res.ok) throw new Error("Failed to load routine history");
+      return res.json();
+    },
+  });
+}
+
 export type CreateRoutineInput = {
   content: string;
   description?: string | null;
