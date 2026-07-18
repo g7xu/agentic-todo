@@ -203,6 +203,102 @@ export async function updateRoutine(
 }
 
 /**
+ * Materialize one future occurrence, already completed — the "I did Thursday's
+ * routine today" path behind the Upcoming board's ghost cards
+ * (docs/ROUTINES.md §RV6). DR2's today-only spawn is untouched: nothing is
+ * pre-spawned, the row exists because the user acted on it.
+ *
+ * Guarded on every axis the ghost cards already respect, because a server
+ * action is reachable with any arguments:
+ *  - the routine must be the caller's and active;
+ *  - completed-based routines are rejected outright — their next date depends
+ *    on when the current one is ticked, so no future occurrence is knowable
+ *    (which is why `occurrencesBetween` projects none);
+ *  - `date` must be a real occurrence on the cadence, not any day the caller
+ *    names;
+ *  - `date` must not be in the past. Ghosts only ever offer today-or-later,
+ *    and backdating a completion would fabricate the per-day history DR1
+ *    exists to keep honest.
+ *
+ * Idempotent via the (routineId, dueDate) unique + `skipDuplicates`: a double
+ * click, or the day's own materialization racing this, still leaves one row.
+ * An existing row is deliberately never overwritten — if today's instance is
+ * already there and active, this must not silently complete it.
+ */
+export async function completeOccurrence(
+  userId: string,
+  routineId: string,
+  date: string,
+): Promise<void> {
+  const r = await prisma.routine.findFirst({
+    where: { id: routineId, userId },
+    select: {
+      id: true,
+      projectId: true,
+      content: true,
+      description: true,
+      priority: true,
+      repeatEvery: true,
+      repeatUnit: true,
+      repeatWeekdays: true,
+      repeatBase: true,
+      startDate: true,
+      endDate: true,
+      active: true,
+    },
+  });
+  if (!r) throw new Error("Routine not found");
+  if (!r.active) throw new Error("Routine is paused");
+  if (r.repeatBase === "completed") {
+    throw new Error("Can't complete a future occurrence of an after-completion routine");
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const today = todayStr(profile?.timezone ?? "UTC");
+  if (date < today) throw new Error("Can't complete a past occurrence");
+
+  const due = isDueOn(
+    {
+      repeatEvery: r.repeatEvery,
+      repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
+      repeatWeekdays: r.repeatWeekdays,
+      repeatBase: "scheduled",
+      startDate: dbDateToStr(r.startDate)!,
+      endDate: dbDateToStr(r.endDate),
+    },
+    date,
+    null,
+  );
+  if (!due) throw new Error("Routine isn't due on that date");
+
+  const max = await prisma.task.aggregate({
+    where: { userId, projectId: r.projectId },
+    _max: { order: true },
+  });
+
+  await prisma.task.createMany({
+    data: [
+      {
+        userId,
+        projectId: r.projectId,
+        routineId: r.id,
+        content: r.content,
+        description: r.description,
+        priority: r.priority,
+        dueDate: toDbDate(date),
+        order: (max._max.order ?? 0) + 1,
+        status: "completed",
+        completedAt: new Date(),
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+/**
  * Delete a routine. Completed/missed instances survive as history (the FK is
  * ON DELETE SET NULL); still-active instances are deleted with the template
  * (docs/ROUTINES.md §2).

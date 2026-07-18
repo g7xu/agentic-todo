@@ -12,6 +12,7 @@ import type {
   RoutineRepeatUnit,
 } from "@/lib/types";
 import {
+  completeRoutineOccurrenceAction,
   createRoutineAction,
   deleteRoutineAction,
   updateRoutineAction,
@@ -92,6 +93,19 @@ export function useUpdateRoutine() {
     mutationFn: ({ id, input }: { id: string; input: UpdateRoutineInput }) =>
       updateRoutineAction(id, input),
     onError: reportError("Couldn’t save the routine"),
+    onSettled: invalidate,
+  });
+}
+
+/** Complete a projected future occurrence (an Upcoming ghost card). Not
+ * optimistic: there is no row to patch until the server creates one, and the
+ * ['tasks'] refetch is what turns the ghost into a real completed card. */
+export function useCompleteRoutineOccurrence() {
+  const invalidate = useInvalidateBoth();
+  return useMutation({
+    mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
+      completeRoutineOccurrenceAction(routineId, date),
+    onError: reportError("Couldn’t complete that occurrence"),
     onSettled: invalidate,
   });
 }

@@ -6,6 +6,7 @@
  */
 
 import {
+  addDays,
   addMonthsClamped,
   dayOfMonth,
   daysInMonth,
@@ -162,6 +163,33 @@ export function isDueOn(
       return dayOfMonth(today) === clampedDay(r.startDate, today);
     }
   }
+}
+
+/**
+ * Every day in `[from, to]` (inclusive) this routine is due on — used by the
+ * Upcoming board to preview a week of routines without materializing them
+ * (docs/ROUTINES.md §RV5). Instances stay today-only in the DB; these are
+ * projections, so they cost nothing and correct themselves the moment the
+ * template is edited.
+ *
+ * Completed-based routines return `[]`: their cadence measures forward from
+ * the last completion, so any date past the current occurrence is a guess that
+ * would visibly jump the instant the user ticks the box. Better to show
+ * nothing than a date we'd have to retract.
+ */
+export function occurrencesBetween(
+  r: RepeatSpec,
+  from: string,
+  to: string,
+): string[] {
+  if (r.repeatBase === "completed") return [];
+  const out: string[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    // lastCompletionDay is irrelevant for scheduled-based cadences, which read
+    // only the startDate grid.
+    if (isDueOn(r, d, null)) out.push(d);
+  }
+  return out;
 }
 
 /** The anchor's day of month, pulled back to the last day of `today`'s month

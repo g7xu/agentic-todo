@@ -4,6 +4,7 @@ import { z } from "zod";
 import { MAX_EVERY } from "@/lib/repeat";
 import { requireUser } from "@/lib/auth/session";
 import {
+  completeOccurrence,
   createRoutine,
   deleteRoutine,
   listRoutines,
@@ -81,6 +82,20 @@ export async function updateRoutineAction(
   const user = await requireUser();
   const data = updateSchema.parse(input);
   return updateRoutine(user.id, z.string().uuid().parse(id), data);
+}
+
+/** Complete a projected future occurrence from the Upcoming board (§RV6). All
+ * the real guarding lives in `completeOccurrence` — this only shapes input. */
+export async function completeRoutineOccurrenceAction(
+  routineId: string,
+  date: string,
+): Promise<void> {
+  const user = await requireUser();
+  await completeOccurrence(
+    user.id,
+    z.string().uuid().parse(routineId),
+    dateStr.parse(date),
+  );
 }
 
 export async function deleteRoutineAction(id: string): Promise<void> {
