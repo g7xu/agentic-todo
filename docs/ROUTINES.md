@@ -55,6 +55,171 @@ conflict with these, **these win** (kept for history rather than rewritten):
   had nothing to show; `listTasks` no longer returns `missed` rows at all). `status = 'missed'`
   survives only as an internal parking state: leftovers of **paused** routines (so they don't
   follow the user around while paused) and rare carry collisions.
+- **RV9 — History is correctable, and gaps are backfilled (2026-07-18).** Two halves that only make
+  sense together, shipped in that order.
+
+  **Phase A — correction.** Clicking an Activity cell changes what that day says: `missed` ↔ `done`,
+  and a day with no row at all becomes `done`. `setRoutineDay` is deliberately looser than
+  `completeOccurrence` (§RV6), which creates *future* work and so must refuse anything off-cadence:
+  paused routines are allowed (pausing shouldn't freeze history) and completed-based routines are
+  allowed on days that already have a row (their cadence isn't computable, so there is nothing else
+  to validate a bare date against). A day with no row is only minted when the cadence covers it.
+  Undo restores the exact prior state including **`clear`**, which deletes the row: undoing "I did
+  do that day" on a day that had no record must leave *no record*, not a fabricated `missed` — a
+  different claim than the one we started with. `clear` only ever removes a routine instance
+  already carrying a verdict, never live work.
+
+  **Phase B — backfill.** `materializeRoutines` gained a step between retire and spawn: due days
+  with no row at all get a `missed` record, so the grid isn't full of `no record` holes (§RV8) and
+  stats stop under-reporting. Records only — retire already minted the single catch-up task, and a
+  fortnight's absence must not produce a fortnight of tasks.
+
+  Backfill **infers** a miss it never observed, so it is bounded at both ends. `BACKFILL_EPOCH` is
+  a hard floor at the ship date, not a rolling window: `Routine` stores only whether a routine is
+  active *now*, with no record of when it was paused, so walking backwards would invent weeks of
+  failure for routines deliberately switched off. `BACKFILL_MAX_DAYS` (30) caps the look-back so
+  one long absence can't write hundreds of rows in a single page load. Completed-based routines are
+  excluded — no computable grid, so no gaps to find. **Phase A shipping first is the point:** the
+  fix for a wrong assertion must exist before the first one is written.
+
+  **Known limit.** The pause hole is bounded, not closed. Pause a routine for two weeks *after* the
+  epoch and backfill still writes fourteen misses on resume. Properly fixing it needs pause history
+  (a `RoutineEvent` table); deferred until it actually bites.
+
+  **Verified 2026-07-18** by temporarily lowering the epoch and driving a real materialize: exactly
+  one gap was filled (the one Tuesday with no row), nothing before the epoch, nothing for today,
+  nothing for a routine whose `startDate` post-dated the gap. Epoch restored and the fabricated row
+  deleted afterwards. All three correction paths were driven in the browser, including
+  `no record → done → undo`, which correctly deleted the row rather than leaving a `missed`.
+
+- **RV8 — The Activity grid replaces the Completed page (2026-07-18).** RV7 phase 3. A
+  contribution-style grid at `/activity`: an aggregate strip (share of each day's due routines
+  completed) over per-routine rows sharing the same columns, so scanning a column reads one day
+  across everything. Owner-decided to drop the global Completed page entirely; completed ordinary
+  tasks stay reachable through each project view's "Show completed" toggle, at the cost of the one
+  cross-project view of finished work.
+
+  **Four cell states, not three.** `done` / `missed` / `not due` / **`no record`**. The fourth is
+  the honest one and the reason this design works: materialization only runs when the app is opened
+  (DR2), so any unopened day produces no rows at all. Those days are drawn *outlined* rather than
+  filled — "nothing here", visually distinct from "nothing due" — because rendering them as misses
+  would turn a quiet week into a week of failure. They are excluded from the completion rate, and
+  they *stop* a streak rather than breaking it: an unobserved day cannot be claimed as a win.
+
+  **Due-ness is derived, never stored.** The grid calls `occurrencesBetween` — the same function
+  the spawner uses (§RV5) — so a cell and a real instance can never disagree about whether a day
+  counted. Completed-based routines project nothing, so their rows show only recorded events
+  against a flat background and claim no streak.
+
+  **Reads never write.** `GET /api/routines/history` deliberately does NOT call
+  `materializeRoutines`, unlike `GET /api/tasks`. Opening your history must not alter it. The
+  window is clamped to 371 days. `listRoutineHistory` exists rather than reusing `listTasks`, which
+  caps completed rows at 200 and drops `missed` entirely — both fatal here.
+
+  Today renders as `not due` rather than `no record`: its instance is still open, and writing it
+  off mid-morning would be a lie. The grid opens scrolled to the most recent day.
+
+- **RV7 — A missed day is recorded, and the work becomes a replannable task (2026-07-18).**
+  Phases 1–2 BUILT (migration `routine_catch_up_tasks`); phase 3 (per-routine history view) not
+  started. Reverses RV2's always-carry. Owner-decided after RV2's cost surfaced: carry
+  rewrites `dueDate`, the only field recording which day an occurrence was *for*, so the per-day
+  history DR1 exists to provide is destroyed for exactly the days worth recording. "Did I water the
+  plants this month" is currently unanswerable.
+
+  **Behavior.** When an unfinished instance's day has passed, it is *retired* rather than carried —
+  two rows, because the record and the work are different things:
+   1. **The record.** The instance is set to `missed` with its `dueDate` frozen on its own day.
+      This is history and is never actionable.
+   2. **The work.** A new **ordinary task** is created — same content/description/priority/project,
+      `routineId` NULL, `fromRoutineId` set — dated the missed day, so it is born overdue. With no
+      `routineId` it escapes RV1's date lock: draggable, reschedulable, editable, deletable like
+      any task. Replanning it is the point.
+
+  **Pile-up guard.** At most **one outstanding catch-up per routine**: if a previous catch-up for
+  the routine is still active, no new one is minted. The `missed` record is still written, so
+  history stays complete even when the catch-up is suppressed. Ignoring a daily routine for a week
+  therefore yields 7 `missed` records but 1 task. (Owner-accepted 2026-07-18. Per-routine
+  configurability — 7 skipped waterings are one watering, 7 skipped workouts may be seven — is the
+  natural v2 and is essentially DR3's `onMiss` returning as a considered choice rather than a
+  default.)
+
+  **Schema.** `Task.fromRoutineId String? @db.Uuid` (+ index, `onDelete: SetNull`). A deliberately
+  *soft* link: it records provenance for the guard and for stats without implying the date lock
+  that `routineId` carries. Both columns must never be set on the same row. Requires a migration —
+  prod migrations are manual here.
+
+  **Consequences.** Carry disappears, and with it the collision case and RV4's tolerant carry loop
+  (paused-routine parking stays — no catch-up is minted for a routine you paused on purpose).
+  Ghost cards are unaffected: catch-ups have a NULL `routineId`, so they never enter the
+  `routineId|dueDate` suppression set. A completed catch-up does **not** flip its `missed` record
+  to completed — the day genuinely was missed, and the catch-up completion is its own record.
+
+  **Where misses surface.** Mostly they don't need their own screen: the overdue catch-up in the
+  task list *is* the visible consequence. The `missed` records are history and belong on the
+  Routines page as a per-routine view. Explicitly **no Today recap strip** — it was removed once
+  already (RV2) and this design makes it redundant rather than merely empty.
+
+  **Applies going forward only.** Instances already carried under RV2 have overwritten dates; that
+  history is unrecoverable (owner-accepted 2026-07-18).
+
+  **Phases.** (1) schema + migration; (2) retire logic in `materializeRoutines`, replacing carry;
+  (3) per-routine history on the Routines page. Phase 2 is the behavior change and is independently
+  shippable — phase 3 only adds a view over data phase 2 already writes.
+
+  **Verified 2026-07-18** against the dev DB by backdating an instance and driving a real
+  materialize: the instance flipped to `missed` with its date frozen, one catch-up appeared dated
+  the missed day with `routineId` NULL, and its edit dialog offers an editable date picker (a
+  routine instance's is read-only under RV1). Backdating a second instance while that catch-up was
+  still active wrote the `missed` record but minted no second task — the guard holds. NOT yet
+  verified: several routines retiring in one pass, and dragging a catch-up on the Upcoming board.
+
+- **RV6 — A ghost can be completed ahead of time (2026-07-18).** RV5 shipped ghosts as fully inert;
+  the owner asked for "I did Thursday's routine today". Clicking a ghost's circle calls
+  `completeOccurrence` (`src/lib/data/routines.ts`), which creates that occurrence's row **on its
+  own date, already completed** — `dueDate` is the day it was *for*, `completedAt` is when it was
+  confirmed, exactly the split RV3 established. DR2's today-only spawn is untouched: the row exists
+  because the user acted, not because anything was pre-spawned, and the spawn step's
+  "instance dated today-or-later in any status" check means the day itself won't duplicate it.
+  Guarded server-side (a server action takes any arguments): routine must be the caller's and
+  active, the date must be a real occurrence on the cadence, and it must not be in the past —
+  backdating would fabricate the per-day history DR1 exists to keep honest. Completed-based
+  routines are rejected outright, matching `occurrencesBetween` projecting none for them.
+  Idempotent via the `(routineId, dueDate)` unique + `skipDuplicates`, which also means an existing
+  row is never overwritten — a stray call cannot silently complete today's active instance.
+  **Each day stands alone:** completing Thursday ahead does not satisfy Tue/Wed, which still
+  materialize normally. Ghosts remain non-draggable and non-editable (RV1).
+
+- **RV5 — Upcoming previews routines as projections, not rows (2026-07-18).** The Upcoming board
+  drew seven day-columns but routines only ever appeared in today's, because DR2 materializes one
+  instance per day on read. Rather than pre-spawning a week of real `Task` rows, the board computes
+  the occurrences itself via `occurrencesBetween` (`src/lib/repeat.ts`) and renders dashed, inert
+  **ghost cards** for any date without a real instance. No schema change, no migration, no API
+  change — `repeat.ts` was already shared server/client by design and `useRoutines` already fetches
+  the templates. Pre-spawning was rejected because it breaks the RV2/RV4 carry rule (tomorrow's row
+  would always exist, so every unfinished instance would hit the collision path), lets the user
+  complete Friday's routine on Monday, and makes a template edit invisible until the pre-spawned
+  window drains. Projections instead correct themselves the moment the template changes.
+  Completed-based routines project nothing: their next date depends on when the current one is
+  ticked, so any projection would visibly retract itself. Ghost cards are not completable or
+  draggable — there is no row to act on, and RV1 already locks instance dates.
+
+- **RV4 — A carry that cannot land leaves the instance overdue; it is never parked (2026-07-18).**
+  RV2 left two producers of `status = 'missed'`: paused-routine leftovers, and *collisions* (an
+  instance dated today-or-later already exists, so the stale one cannot take today's slot). But
+  `listTasks` never returns `missed` rows and **no view renders them** — the recap strip that used
+  to surface them was removed in RV2. Parking on collision therefore destroyed unfinished work
+  silently and irreversibly from the UI. Collisions now leave the instance **active on its own
+  date**, where Today's Overdue section and the Upcoming board's Overdue column both already show
+  it. Paused-routine parking stays (it is reversible by unpausing) and is now the only producer.
+  Two related hardenings in the same change: the carry writes row-by-row inside a `try`, because a
+  concurrent `/api/tasks` materialize can create today's instance first and make the
+  `(routineId, dueDate)` unique reject the move — previously that threw out of a batched
+  `updateMany` and **aborted the spawn step**, so *every* routine silently went missing for that
+  read. A lost race is now a no-op that leaves the row overdue. Note this is deliberately not
+  solved with a transaction: at Postgres' default read-committed isolation both writers can still
+  observe "no row for today", so only `SERIALIZABLE` + retry would close it — too costly for every
+  tasks read, and unnecessary once losing the race is harmless.
+
 - **RV3 — "Done yesterday but forgot to check it off"** is now simply completing the carried
   instance: `completedAt` records when it was confirmed. No backfill flow needed; the planned R3
   `backfill_missed` agent tool is dropped.

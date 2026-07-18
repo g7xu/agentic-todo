@@ -4,9 +4,11 @@ import { z } from "zod";
 import { MAX_EVERY } from "@/lib/repeat";
 import { requireUser } from "@/lib/auth/session";
 import {
+  completeOccurrence,
   createRoutine,
   deleteRoutine,
   listRoutines,
+  setRoutineDay,
   updateRoutine,
 } from "@/lib/data/routines";
 import type { RoutineDTO } from "@/lib/types";
@@ -81,6 +83,36 @@ export async function updateRoutineAction(
   const user = await requireUser();
   const data = updateSchema.parse(input);
   return updateRoutine(user.id, z.string().uuid().parse(id), data);
+}
+
+/** Complete a projected future occurrence from the Upcoming board (§RV6). All
+ * the real guarding lives in `completeOccurrence` — this only shapes input. */
+export async function completeRoutineOccurrenceAction(
+  routineId: string,
+  date: string,
+): Promise<void> {
+  const user = await requireUser();
+  await completeOccurrence(
+    user.id,
+    z.string().uuid().parse(routineId),
+    dateStr.parse(date),
+  );
+}
+
+/** Correct what a past day says about a routine, from the Activity grid
+ * (§RV9). All real guarding lives in `setRoutineDay`. */
+export async function setRoutineDayAction(
+  routineId: string,
+  date: string,
+  status: "completed" | "missed" | "clear",
+): Promise<void> {
+  const user = await requireUser();
+  await setRoutineDay(
+    user.id,
+    z.string().uuid().parse(routineId),
+    dateStr.parse(date),
+    z.enum(["completed", "missed", "clear"]).parse(status),
+  );
 }
 
 export async function deleteRoutineAction(id: string): Promise<void> {

@@ -20,7 +20,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, Clock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Check, Clock, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
@@ -34,6 +34,11 @@ import {
   useUncompleteTask,
 } from "@/hooks/use-tasks";
 import { useProjects } from "@/hooks/use-projects";
+import {
+  useCompleteRoutineOccurrence,
+  useRoutines,
+} from "@/hooks/use-routines";
+import { occurrencesBetween } from "@/lib/repeat";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,7 +47,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
-import type { ProjectDTO, TaskDTO } from "@/lib/types";
+import type { ProjectDTO, RoutineDTO, TaskDTO } from "@/lib/types";
 
 /** Check-circle tint per priority — replaces the old flag while keeping the
  * priority visible, Todoist-style. The `!` on border colors is required:
@@ -264,11 +269,58 @@ function SortableTask({
   );
 }
 
+/**
+ * A routine occurrence that has not been materialized yet — a projection, not
+ * a task (docs/ROUTINES.md §RV5). Dashed throughout to signal "no row behind
+ * this yet". The one thing it can do is be completed ahead of time (§RV6),
+ * which creates the row on its own date already done. Still not draggable or
+ * editable: there is nothing to reorder, and RV1 locks instance dates anyway.
+ */
+function GhostCard({
+  routine,
+  date,
+  projects,
+}: {
+  routine: RoutineDTO;
+  date: string;
+  projects: ProjectDTO[];
+}) {
+  const complete = useCompleteRoutineOccurrence();
+  const project = projects.find((p) => p.id === routine.projectId);
+  return (
+    <div className="bg-card/40 flex items-start gap-2 rounded-md border border-dashed p-2 text-sm">
+      <button
+        type="button"
+        disabled={complete.isPending}
+        aria-label={`Complete "${routine.content}" ahead of time`}
+        title="Complete ahead of time"
+        className={cn(
+          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed disabled:opacity-40",
+          PRIORITY_CIRCLE[routine.priority],
+        )}
+        onClick={() => complete.mutate({ routineId: routine.id, date })}
+      />
+      <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+        <span className="text-muted-foreground truncate">
+          {routine.content}
+        </span>
+        <div className="text-muted-foreground/70 flex items-center gap-2 text-xs">
+          <Repeat className="size-3 shrink-0" />
+          {project && !project.isInbox && (
+            <span className="truncate"># {project.name}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Column({
   date,
   label,
   ids,
   completedIds,
+  ghosts,
   taskById,
   projects,
 }: {
@@ -276,6 +328,7 @@ function Column({
   label: string;
   ids: string[];
   completedIds: string[];
+  ghosts: RoutineDTO[];
   taskById: Map<string, TaskDTO>;
   projects: ProjectDTO[];
 }) {
@@ -316,6 +369,12 @@ function Column({
               ) : null;
             })}
           </SortableContext>
+          {/* Routine previews sit under the real tasks — they aren't work you
+              can act on yet, just a heads-up that the day isn't as empty as it
+              looks. Outside SortableContext so drags ignore them entirely. */}
+          {ghosts.map((r) => (
+            <GhostCard key={r.id} routine={r} date={date} projects={projects} />
+          ))}
           {/* Completed tasks stay in their day column, crossed out at the
               bottom; plain cards (no useSortable) so they can't be dragged. */}
           {completedIds.map((id) => {
@@ -346,6 +405,7 @@ export function UpcomingBoard() {
   const today = todayStr(tz);
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
+  const { data: routines = [] } = useRoutines();
   const move = useMoveTask();
 
   const [horizon, setHorizon] = useState(7);
@@ -409,6 +469,32 @@ export function UpcomingBoard() {
     for (const t of done) cols[t.dueDate!].push(t.id);
     return cols;
   }, [tasks, dates]);
+
+  // Routine occurrences projected across the visible range. The server only
+  // ever materializes today's instance (docs/ROUTINES.md §DR2), so without
+  // this the future columns look empty even though the routine will fire.
+  // Suppressed on any date that already has a real instance — today's, and
+  // any unfinished one still sitting on its own date — so a routine is never
+  // shown twice.
+  const ghostsByDate = useMemo<Record<string, RoutineDTO[]>>(() => {
+    const cols: Record<string, RoutineDTO[]> = Object.fromEntries(
+      dates.map((d) => [d, []]),
+    );
+    if (dates.length === 0) return cols;
+    const materialized = new Set(
+      tasks
+        .filter((t) => t.routineId !== null && t.dueDate !== null)
+        .map((t) => `${t.routineId}|${t.dueDate}`),
+    );
+    const last = dates[dates.length - 1];
+    for (const r of routines) {
+      if (!r.active) continue;
+      for (const d of occurrencesBetween(r, dates[0], last)) {
+        if (!materialized.has(`${r.id}|${d}`)) cols[d].push(r);
+      }
+    }
+    return cols;
+  }, [routines, tasks, dates]);
 
   // When idle, render straight from the server cache; during a drag, render the
   // local `items` (seeded on drag start, mutated by onDragOver). This avoids a
@@ -535,6 +621,7 @@ export function UpcomingBoard() {
               label="Overdue"
               ids={view[OVERDUE] ?? []}
               completedIds={[]}
+              ghosts={[]}
               taskById={taskById}
               projects={projects}
             />
@@ -546,6 +633,7 @@ export function UpcomingBoard() {
               label={columnLabel(date, today)}
               ids={view[date] ?? []}
               completedIds={completedItems[date] ?? []}
+              ghosts={ghostsByDate[date] ?? []}
               taskById={taskById}
               projects={projects}
             />

@@ -61,6 +61,11 @@ model Task {
   dueDate     DateTime? @map("due_date") @db.Date
   status      String    @default("active") /// 'active' | 'completed' | 'missed'
   routineId   String?   @map("routine_id") @db.Uuid /// set when this task is a materialized routine instance
+  /// Set when this is a CATCH-UP task minted for a missed occurrence (docs/ROUTINES.md §RV7).
+  /// Deliberately a soft link: it records provenance for the one-outstanding-catch-up guard and
+  /// for stats, WITHOUT implying the date lock that `routineId` carries (RV1) — the whole point
+  /// is that this row can be rescheduled like any ordinary task. Never set alongside `routineId`.
+  fromRoutineId String? @map("from_routine_id") @db.Uuid
   timeUsed    Int?      @map("time_used") /// minutes spent on the task ("HH:MM" in the UI)
   order       Float     @default(0)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
@@ -69,7 +74,8 @@ model Task {
 
   user    Profile  @relation(fields: [userId], references: [id])
   project Project  @relation(fields: [projectId], references: [id])
-  routine Routine? @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  routine     Routine? @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
+  fromRoutine Routine? @relation("RoutineCatchUps", fields: [fromRoutineId], references: [id], onDelete: SetNull)
 
   // Idempotency guard for routine materialization: at most one instance per
   // routine per day. NULLs are distinct in Postgres, so ordinary tasks
@@ -77,6 +83,9 @@ model Task {
   @@unique([routineId, dueDate])
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
+  // Backs the one-outstanding-catch-up guard, which asks "does this routine
+  // already have an active catch-up?" on every materialize.
+  @@index([userId, fromRoutineId, status])
   @@map("tasks")
 }
 
@@ -100,7 +109,8 @@ model Routine {
 
   user    Profile @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
-  tasks   Task[]
+  tasks    Task[] @relation("RoutineInstances")
+  catchUps Task[] @relation("RoutineCatchUps")
 
   @@index([userId, active])
   @@map("routines")

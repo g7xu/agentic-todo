@@ -12,8 +12,10 @@ import type {
   RoutineRepeatUnit,
 } from "@/lib/types";
 import {
+  completeRoutineOccurrenceAction,
   createRoutineAction,
   deleteRoutineAction,
+  setRoutineDayAction,
   updateRoutineAction,
 } from "@/app/actions/routines";
 import { TASKS_KEY } from "@/hooks/use-tasks";
@@ -29,6 +31,27 @@ async function fetchRoutines(): Promise<RoutineDTO[]> {
 
 export function useRoutines() {
   return useQuery({ queryKey: ROUTINES_KEY, queryFn: fetchRoutines });
+}
+
+export type RoutineDay = {
+  routineId: string;
+  date: string;
+  status: "completed" | "missed";
+};
+
+export type RoutineHistory = { from: string; to: string; days: RoutineDay[] };
+
+/** Recorded routine instances for the Activity grid (docs/ROUTINES.md §RV8).
+ * Keyed by window length so switching 12 weeks ↔ a year caches both. */
+export function useRoutineHistory(days: number) {
+  return useQuery({
+    queryKey: [...ROUTINES_KEY, "history", days] as const,
+    queryFn: async (): Promise<RoutineHistory> => {
+      const res = await fetch(`/api/routines/history?days=${days}`);
+      if (!res.ok) throw new Error("Failed to load routine history");
+      return res.json();
+    },
+  });
 }
 
 export type CreateRoutineInput = {
@@ -93,6 +116,41 @@ export function useUpdateRoutine() {
       updateRoutineAction(id, input),
     onError: reportError("Couldn’t save the routine"),
     onSettled: invalidate,
+  });
+}
+
+/** Complete a projected future occurrence (an Upcoming ghost card). Not
+ * optimistic: there is no row to patch until the server creates one, and the
+ * ['tasks'] refetch is what turns the ghost into a real completed card. */
+export function useCompleteRoutineOccurrence() {
+  const invalidate = useInvalidateBoth();
+  return useMutation({
+    mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
+      completeRoutineOccurrenceAction(routineId, date),
+    onError: reportError("Couldn’t complete that occurrence"),
+    onSettled: invalidate,
+  });
+}
+
+/** Correct one day of one routine from the Activity grid (§RV9). Invalidates
+ * ['tasks'] too: clearing or un-completing a day changes real task rows. */
+export function useSetRoutineDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      routineId,
+      date,
+      status,
+    }: {
+      routineId: string;
+      date: string;
+      status: "completed" | "missed" | "clear";
+    }) => setRoutineDayAction(routineId, date, status),
+    onError: reportError("Couldn’t update that day"),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ROUTINES_KEY });
+      qc.invalidateQueries({ queryKey: TASKS_KEY });
+    },
   });
 }
 

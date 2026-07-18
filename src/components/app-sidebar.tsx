@@ -34,7 +34,10 @@ const NAV = [
   { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/upcoming", label: "Upcoming", icon: CalendarClock },
-  { href: "/completed", label: "Completed", icon: CheckCircle2 },
+  // Replaced the Completed page (docs/ROUTINES.md §RV8). Completed ordinary
+  // tasks remain reachable per project via each project view's "Show
+  // completed" toggle.
+  { href: "/activity", label: "Activity", icon: CheckCircle2 },
   { href: "/routines", label: "Routines", icon: Repeat },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
