@@ -321,14 +321,18 @@ export async function deleteRoutine(userId: string, id: string): Promise<void> {
  * knows routines recur. Idempotent and user-scoped; called from the tasks
  * read path with `today = todayStr(profile.timezone)` and the profile tz
  * (needed to turn `completedAt` timestamps into local calendar days).
- * Carry → spawn:
+ * Retire → spawn:
  *
- *  1. carry:  an unfinished instance from a past day rolls forward to today,
- *             whatever the cadence (a routine never piles up and never
- *             silently disappears). Paused routines' leftovers are parked as
- *             'missed' instead of following the user around; so are the rare
- *             collision cases (today's slot already taken), keeping the
- *             (routineId, dueDate) unique satisfiable.
+ *  1. retire: an unfinished instance whose day has passed is set to 'missed'
+ *             with its dueDate FROZEN on its own day — that frozen date is the
+ *             per-day history DR1 exists to keep, and the old carry rule
+ *             destroyed it by overwriting the date (§RV7). The work is not
+ *             lost: each active routine also gets one ordinary CATCH-UP task
+ *             (routineId NULL, fromRoutineId set), dated the missed day, which
+ *             the user can reschedule freely because it carries no routineId
+ *             and so no date lock (§RV1). At most one outstanding catch-up per
+ *             routine, so a week of ignored days is 7 records but 1 task.
+ *             Paused routines are recorded but mint nothing.
  *  2. spawn:  one instance per active routine that is DUE today and lacks an
  *             instance dated today or later (any status). Due today means:
  *             - scheduled-based: today is on the startDate + k·repeatEvery
@@ -348,9 +352,7 @@ export async function materializeRoutines(
 ): Promise<void> {
   const todayDb = toDbDate(today);
 
-  // 1. Carry: newest stale instance per active routine moves to today.
-  // Extras, collisions with an existing today-or-later instance, and
-  // leftovers of paused routines are parked as 'missed'.
+  // 1. Retire every stale instance, and mint catch-up work for the active ones.
   const stale = await prisma.task.findMany({
     where: {
       userId,
@@ -358,49 +360,105 @@ export async function materializeRoutines(
       dueDate: { lt: todayDb },
       routineId: { not: null },
     },
-    orderBy: { dueDate: "desc" },
-    select: { id: true, routineId: true, routine: { select: { active: true } } },
+    // Oldest first: when several days of one routine are retired at once, the
+    // catch-up inherits the OLDEST missed date, so its overdue age tells the
+    // truth about how long the work has been owed.
+    orderBy: { dueDate: "asc" },
+    select: {
+      id: true,
+      routineId: true,
+      projectId: true,
+      content: true,
+      description: true,
+      priority: true,
+      dueDate: true,
+      routine: { select: { active: true } },
+    },
   });
   if (stale.length > 0) {
     const staleRoutineIds = [...new Set(stale.map((t) => t.routineId!))];
-    const todayRows = await prisma.task.findMany({
+
+    // The one-outstanding-catch-up guard: a routine that already owes the user
+    // an unfinished catch-up does not get another. Seven ignored days leave
+    // seven 'missed' records but one task (§RV7).
+    const outstanding = await prisma.task.findMany({
       where: {
         userId,
-        routineId: { in: staleRoutineIds },
-        dueDate: { gte: todayDb },
+        status: "active",
+        fromRoutineId: { in: staleRoutineIds },
       },
-      select: { routineId: true },
+      select: { fromRoutineId: true },
     });
-    const taken = new Set(todayRows.map((r) => r.routineId));
-    const carryIds: string[] = [];
-    const parkIds: string[] = [];
+    const owed = new Set(outstanding.map((t) => t.fromRoutineId));
+
+    type CatchUp = {
+      projectId: string;
+      content: string;
+      description: string | null;
+      priority: number;
+      dueDate: Date | null;
+      fromRoutineId: string;
+    };
+    const catchUps: CatchUp[] = [];
     for (const t of stale) {
-      if (!t.routine?.active || taken.has(t.routineId)) {
-        parkIds.push(t.id);
-      } else {
-        taken.add(t.routineId);
-        carryIds.push(t.id);
-      }
-    }
-    if (carryIds.length > 0) {
-      await prisma.task.updateMany({
-        where: { id: { in: carryIds }, userId },
-        data: { dueDate: todayDb },
+      // A paused routine's leftover is recorded but never minted into work —
+      // you paused it on purpose, so it must not follow you around.
+      if (!t.routine?.active || owed.has(t.routineId)) continue;
+      owed.add(t.routineId);
+      catchUps.push({
+        // Copied from the INSTANCE, not the template: any edit the user made to
+        // the instance is what they actually saw, and the template may have
+        // moved on since.
+        projectId: t.projectId,
+        content: t.content,
+        description: t.description,
+        priority: t.priority,
+        // Dated the missed day, so it is born overdue rather than mixing into
+        // today's list beside today's fresh instance.
+        dueDate: t.dueDate,
+        fromRoutineId: t.routineId!,
       });
     }
-    if (parkIds.length > 0) {
-      await prisma.task.updateMany({
-        where: { id: { in: parkIds }, userId },
-        data: { status: "missed" },
+
+    // Record first, then mint. If the second write fails, the worst case is a
+    // recorded miss with no catch-up — a gap in work, not a lie in the history.
+    // The reverse order could double-mint on retry.
+    await prisma.task.updateMany({
+      where: { id: { in: stale.map((t) => t.id) }, userId },
+      data: { status: "missed" },
+    });
+
+    if (catchUps.length > 0) {
+      const maxes = await prisma.task.groupBy({
+        by: ["projectId"],
+        where: {
+          userId,
+          projectId: { in: [...new Set(catchUps.map((c) => c.projectId))] },
+        },
+        _max: { order: true },
+      });
+      const nextOrder = new Map(
+        maxes.map((m) => [m.projectId, m._max.order ?? 0]),
+      );
+      await prisma.task.createMany({
+        data: catchUps.map((c) => {
+          const order = (nextOrder.get(c.projectId) ?? 0) + 1;
+          nextOrder.set(c.projectId, order);
+          // routineId stays NULL — that is what frees the row from RV1's date
+          // lock and makes it an ordinary, reschedulable task.
+          return { userId, ...c, order };
+        }),
       });
     }
   }
 
   // 2. Spawn instances for active, due-today routines that don't have one
   // dated today OR LATER, in any status. A completed today-instance must not
-  // respawn, and the carried instance above already IS today's — the gte
-  // check keeps this safe even for future-dated instances (e.g. after a
-  // westward timezone change).
+  // respawn, and nor must one completed ahead of time (§RV6). The gte check
+  // also keeps this safe for future-dated instances (e.g. after a westward
+  // timezone change). Retired instances above are all dated BEFORE today, so
+  // they never suppress today's spawn — that is what gives the user a fresh
+  // task today alongside the overdue catch-up (§RV7).
   const routines = await prisma.routine.findMany({
     where: { userId, active: true },
     select: {
