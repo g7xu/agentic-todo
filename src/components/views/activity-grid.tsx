@@ -275,8 +275,21 @@ export function ActivityGrid() {
                   <div className="truncate text-[13px] font-medium">
                     {routine.content}
                   </div>
-                  <div className="text-muted-foreground truncate font-mono text-[10px]">
-                    {cadenceLabel(routine)}
+                  <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px]">
+                    {/* Without this a paused routine reads as one that was
+                        simply abandoned — trailing off into empty cells looks
+                        like failure rather than a deliberate choice. An ended
+                        routine already says so via its cadence label
+                        ("… until Jul 8"); paused had no equivalent. */}
+                    {!routine.active && (
+                      <span
+                        title="Paused — no new instances spawn, and days after pausing are not recorded"
+                        className="border-muted-foreground/30 text-muted-foreground shrink-0 rounded border px-1 tracking-wide uppercase"
+                      >
+                        paused
+                      </span>
+                    )}
+                    <span className="truncate">{cadenceLabel(routine)}</span>
                   </div>
                 </div>
                 {cells.map((c, i) => {
