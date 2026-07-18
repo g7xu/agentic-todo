@@ -15,6 +15,7 @@ import {
   completeRoutineOccurrenceAction,
   createRoutineAction,
   deleteRoutineAction,
+  setRoutineDayAction,
   updateRoutineAction,
 } from "@/app/actions/routines";
 import { TASKS_KEY } from "@/hooks/use-tasks";
@@ -128,6 +129,28 @@ export function useCompleteRoutineOccurrence() {
       completeRoutineOccurrenceAction(routineId, date),
     onError: reportError("Couldn’t complete that occurrence"),
     onSettled: invalidate,
+  });
+}
+
+/** Correct one day of one routine from the Activity grid (§RV9). Invalidates
+ * ['tasks'] too: clearing or un-completing a day changes real task rows. */
+export function useSetRoutineDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      routineId,
+      date,
+      status,
+    }: {
+      routineId: string;
+      date: string;
+      status: "completed" | "missed" | "clear";
+    }) => setRoutineDayAction(routineId, date, status),
+    onError: reportError("Couldn’t update that day"),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ROUTINES_KEY });
+      qc.invalidateQueries({ queryKey: TASKS_KEY });
+    },
   });
 }
 

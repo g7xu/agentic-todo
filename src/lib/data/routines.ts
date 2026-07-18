@@ -107,6 +107,129 @@ export async function listRoutineHistory(
   }));
 }
 
+/** 'clear' removes the record entirely — the only honest undo for "I did do
+ * that day" when no row existed before it (docs/ROUTINES.md §RV9). */
+export type RoutineDayStatus = "completed" | "missed" | "clear";
+
+/**
+ * Correct what one past day says about one routine — the Activity grid's
+ * click-a-cell path (§RV9). This is the counterweight to the app asserting
+ * things it never observed: any day the engine guessed at, the user can
+ * overrule.
+ *
+ * Deliberately looser than `completeOccurrence` (§RV6), which creates FUTURE
+ * work and so must refuse anything off-cadence:
+ *  - paused routines are allowed; pausing shouldn't freeze your history;
+ *  - completed-based routines are allowed, but only on days that already have
+ *    a row — their cadence isn't computable, so there is nothing else to
+ *    validate a bare date against;
+ *  - the date must be today or earlier. Asserting a future day was missed is
+ *    meaningless, and completing one ahead is RV6's job.
+ */
+export async function setRoutineDay(
+  userId: string,
+  routineId: string,
+  date: string,
+  status: RoutineDayStatus,
+): Promise<void> {
+  const r = await prisma.routine.findFirst({
+    where: { id: routineId, userId },
+    select: {
+      id: true,
+      projectId: true,
+      content: true,
+      description: true,
+      priority: true,
+      repeatEvery: true,
+      repeatUnit: true,
+      repeatWeekdays: true,
+      repeatBase: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+  if (!r) throw new Error("Routine not found");
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  if (date > todayStr(profile?.timezone ?? "UTC")) {
+    throw new Error("Can't correct a future day");
+  }
+
+  const existing = await prisma.task.findFirst({
+    where: { userId, routineId, dueDate: toDbDate(date) },
+    select: { id: true },
+  });
+
+  if (status === "clear") {
+    // Only ever removes a routine instance, never an ordinary task, and only
+    // one that already carries a verdict — an active instance is live work.
+    if (existing) {
+      await prisma.task.deleteMany({
+        where: {
+          id: existing.id,
+          userId,
+          routineId: { not: null },
+          status: { in: ["completed", "missed"] },
+        },
+      });
+    }
+    return;
+  }
+
+  if (existing) {
+    await prisma.task.updateMany({
+      where: { id: existing.id, userId },
+      data: {
+        status,
+        completedAt: status === "completed" ? new Date() : null,
+      },
+    });
+    return;
+  }
+
+  // No row yet: only mint one on a day the cadence actually covers, so a
+  // crafted call can't scatter records across arbitrary dates.
+  const due = isDueOn(
+    {
+      repeatEvery: r.repeatEvery,
+      repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
+      repeatWeekdays: r.repeatWeekdays,
+      repeatBase: "scheduled",
+      startDate: dbDateToStr(r.startDate)!,
+      endDate: dbDateToStr(r.endDate),
+    },
+    date,
+    null,
+  );
+  if (!due) throw new Error("Routine isn't due on that date");
+
+  const max = await prisma.task.aggregate({
+    where: { userId, projectId: r.projectId },
+    _max: { order: true },
+  });
+  await prisma.task.createMany({
+    data: [
+      {
+        userId,
+        projectId: r.projectId,
+        routineId: r.id,
+        content: r.content,
+        description: r.description,
+        priority: r.priority,
+        dueDate: toDbDate(date),
+        order: (max._max.order ?? 0) + 1,
+        status,
+        completedAt: status === "completed" ? new Date() : null,
+      },
+    ],
+    // A double click races itself; the unique index settles it.
+    skipDuplicates: true,
+  });
+}
+
 export type CreateRoutineInput = {
   content: string;
   description?: string | null;

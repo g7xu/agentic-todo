@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
 import { cadenceLabel, occurrencesBetween } from "@/lib/repeat";
-import { useRoutineHistory, useRoutines } from "@/hooks/use-routines";
+import { toast } from "sonner";
+import {
+  useRoutineHistory,
+  useRoutines,
+  useSetRoutineDay,
+} from "@/hooks/use-routines";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -53,10 +58,49 @@ function dayLabel(date: string): string {
   });
 }
 
+/** What clicking a cell asserts, and what undoing it restores. 'notdue' is
+ * absent: there is nothing to claim about a day the routine wasn't due. */
+const NEXT_STATUS: Partial<Record<Cell, "completed" | "missed">> = {
+  missed: "completed",
+  norecord: "completed",
+  done: "missed",
+};
+
+/** Restoring a cell to what it was. Note 'done' maps to the API's
+ * 'completed', and 'norecord' to 'clear' — a cell that had no row goes back
+ * to having none, rather than being left as a 'missed' we invented. */
+const UNDO_STATUS: Partial<Record<Cell, "completed" | "missed" | "clear">> = {
+  done: "completed",
+  missed: "missed",
+  norecord: "clear",
+};
+
 export function ActivityGrid() {
   const tz = useTimezone();
   const today = todayStr(tz);
   const [windowDays, setWindowDays] = useState(84);
+  const setDay = useSetRoutineDay();
+
+  // Undo restores the cell to what it was. A cell that had no row at all goes
+  // back to having none — 'clear' — rather than being left as a fabricated
+  // 'missed', which would be a different claim than the one we started with.
+  function correct(routineId: string, date: string, from: Cell, name: string) {
+    const to = NEXT_STATUS[from];
+    const back = UNDO_STATUS[from];
+    if (!to || !back) return;
+    setDay.mutate(
+      { routineId, date, status: to },
+      {
+        onSuccess: () =>
+          toast(`${name} · ${dayLabel(date)} marked ${to}`, {
+            action: {
+              label: "Undo",
+              onClick: () => setDay.mutate({ routineId, date, status: back }),
+            },
+          }),
+      },
+    );
+  }
 
   const { data: routines = [], isLoading: loadingRoutines } = useRoutines();
   const { data: history, isLoading: loadingHistory } =
@@ -155,7 +199,9 @@ export function ActivityGrid() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div className="text-muted-foreground text-sm">
-          {loading ? "Loading…" : `Ending ${dayLabel(today)}`}
+          {loading
+            ? "Loading…"
+            : `Ending ${dayLabel(today)} · click any day to correct it`}
         </div>
         <div className="flex gap-1">
           {WINDOWS.map((w) => (
@@ -233,21 +279,47 @@ export function ActivityGrid() {
                     {cadenceLabel(routine)}
                   </div>
                 </div>
-                {cells.map((c, i) => (
-                  <div
-                    key={dates[i]}
-                    title={`${routine.content} · ${dayLabel(dates[i])} — ${CELL_LABEL[c]}`}
-                    className={cn(
-                      "size-3 shrink-0 rounded-[2.5px]",
-                      CELL_CLASS[c],
-                    )}
-                  />
-                ))}
-                <div className="text-muted-foreground ml-3 shrink-0 font-mono text-[11px] tabular-nums whitespace-nowrap">
+                {cells.map((c, i) => {
+                  const base = cn("size-3 shrink-0 rounded-[2.5px]", CELL_CLASS[c]);
+                  const label = `${routine.content} · ${dayLabel(dates[i])} — ${CELL_LABEL[c]}`;
+                  // 'not due' days assert nothing, so they stay inert divs —
+                  // which also keeps hundreds of empty cells out of the tab
+                  // order.
+                  if (!NEXT_STATUS[c]) {
+                    return <div key={dates[i]} title={label} className={base} />;
+                  }
+                  return (
+                    <button
+                      key={dates[i]}
+                      type="button"
+                      disabled={setDay.isPending}
+                      title={`${label} · click to mark ${NEXT_STATUS[c]}`}
+                      aria-label={label}
+                      onClick={() =>
+                        correct(routine.id, dates[i], c, routine.content)
+                      }
+                      className={cn(
+                        base,
+                        "hover:ring-foreground/40 cursor-pointer hover:ring-2 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none disabled:cursor-default",
+                      )}
+                    />
+                  );
+                })}
+                {/* Streak counts consecutive OCCURRENCES, not days — a weekly
+                    routine done twice running is a streak of 2, though eight
+                    days separate them. Hence '×2' rather than '2d'. */}
+                <div
+                  className="text-muted-foreground ml-3 shrink-0 font-mono text-[11px] tabular-nums whitespace-nowrap"
+                  title={
+                    openEnded
+                      ? `${done} completions recorded`
+                      : `${done} of ${counted} recorded days done · ${streak} in a row`
+                  }
+                >
                   {openEnded
                     ? `${done} done`
                     : counted > 0
-                      ? `${Math.round((done / counted) * 100)}% · ${streak}d`
+                      ? `${Math.round((done / counted) * 100)}% · ×${streak}`
                       : "—"}
                 </div>
               </div>

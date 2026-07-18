@@ -8,6 +8,7 @@ import {
   createRoutine,
   deleteRoutine,
   listRoutines,
+  setRoutineDay,
   updateRoutine,
 } from "@/lib/data/routines";
 import type { RoutineDTO } from "@/lib/types";
@@ -95,6 +96,22 @@ export async function completeRoutineOccurrenceAction(
     user.id,
     z.string().uuid().parse(routineId),
     dateStr.parse(date),
+  );
+}
+
+/** Correct what a past day says about a routine, from the Activity grid
+ * (§RV9). All real guarding lives in `setRoutineDay`. */
+export async function setRoutineDayAction(
+  routineId: string,
+  date: string,
+  status: "completed" | "missed" | "clear",
+): Promise<void> {
+  const user = await requireUser();
+  await setRoutineDay(
+    user.id,
+    z.string().uuid().parse(routineId),
+    dateStr.parse(date),
+    z.enum(["completed", "missed", "clear"]).parse(status),
   );
 }
 
