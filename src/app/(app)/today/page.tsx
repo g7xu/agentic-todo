@@ -1,5 +1,6 @@
 "use client";
 
+import { PlannedTotal } from "@/components/planned-total";
 import { QuickAdd } from "@/components/quick-add";
 import { TaskList } from "@/components/task-list";
 import { useTimezone } from "@/components/timezone-context";
@@ -32,7 +33,12 @@ export default function TodayPage() {
   return (
     <div className="mx-auto max-w-2xl p-6">
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Today</h1>
-      <p className="text-muted-foreground mb-4 text-sm">{today}</p>
+      {/* Today's load only — overdue work is counted in its own section header,
+          so the headline number means "what today asks of me". */}
+      <p className="text-muted-foreground mb-4 flex items-center gap-2 text-sm">
+        {today}
+        <PlannedTotal items={dueToday} />
+      </p>
 
       <div className="overflow-hidden rounded-lg border">
         <QuickAdd
@@ -50,8 +56,9 @@ export default function TodayPage() {
         )}
         {!isError && overdue.length > 0 && (
           <>
-            <div className="text-muted-foreground bg-muted/40 px-3 py-1.5 text-xs font-medium tracking-wide uppercase">
+            <div className="text-muted-foreground bg-muted/40 flex items-center justify-between px-3 py-1.5 text-xs font-medium tracking-wide uppercase">
               Overdue
+              <PlannedTotal items={overdue} className="normal-case" />
             </div>
             <TaskList tasks={overdue} projects={projects} showProject />
           </>

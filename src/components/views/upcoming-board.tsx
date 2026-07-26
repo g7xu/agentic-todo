@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
 import { formatDuration } from "@/lib/duration";
+import { PlannedTotal } from "@/components/planned-total";
 import { QuickAdd } from "@/components/quick-add";
 import {
   useCompleteTask,
@@ -361,15 +362,25 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const isOverdue = date === OVERDUE;
+  // Ghosts count: an unmaterialized occurrence is still work this day will ask
+  // for. Completed tasks don't — "planned" is about what's left.
+  const planned = [
+    ...ids.map((id) => taskById.get(id)).filter((t) => t !== undefined),
+    ...ghosts,
+  ];
   return (
     <div className="flex max-h-full w-64 shrink-0 flex-col">
       <div
         className={cn(
-          "px-1 pb-2 text-sm font-medium",
+          "flex items-baseline justify-between gap-2 px-1 pb-2 text-sm font-medium",
           isOverdue && "text-red-500",
         )}
       >
         {label}
+        <PlannedTotal
+          items={planned}
+          className="text-muted-foreground text-xs font-normal"
+        />
       </div>
       {/* The box hugs its content (columns are `items-start` in the board
           row) but never exceeds the board height (`max-h-full` on the column
