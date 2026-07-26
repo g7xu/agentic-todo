@@ -41,6 +41,7 @@ type RoutineRow = {
   content: string;
   description: string | null;
   priority: number;
+  estimate: number | null;
   projectId: string;
   repeatEvery: number;
   repeatUnit: string;
@@ -57,6 +58,7 @@ const SELECT = {
   content: true,
   description: true,
   priority: true,
+  estimate: true,
   projectId: true,
   repeatEvery: true,
   repeatUnit: true,
@@ -74,6 +76,7 @@ function toDTO(r: RoutineRow): RoutineDTO {
     content: r.content,
     description: r.description,
     priority: r.priority,
+    estimate: r.estimate,
     projectId: r.projectId,
     repeatEvery: r.repeatEvery,
     repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",

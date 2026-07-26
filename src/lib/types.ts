@@ -11,7 +11,8 @@ export type TaskDTO = {
   description: string | null;
   priority: number; // 1=p1 (highest) … 4=default
   dueDate: string | null;
-  timeUsed: number | null; // minutes spent on the task ("HH:MM" in the UI)
+  estimate: number | null; // expected minutes (docs/ESTIMATES.md)
+  timeUsed: number | null; // minutes actually spent
   status: TaskStatus;
   order: number;
   projectId: string;
@@ -31,6 +32,7 @@ export type RoutineDTO = {
   content: string;
   description: string | null;
   priority: number; // 1=p1 (highest) … 4=default
+  estimate: number | null; // default expected minutes, copied into each instance
   projectId: string;
   repeatEvery: number; // every N units
   repeatUnit: RoutineRepeatUnit;
