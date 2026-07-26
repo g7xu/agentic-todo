@@ -327,6 +327,12 @@ function GhostCard({
         </span>
         <div className="text-muted-foreground/70 flex items-center gap-2 text-xs">
           <Repeat className="size-3 shrink-0" />
+          {routine.estimate !== null && (
+            <span className="flex items-center gap-0.5" title="Estimated">
+              <Clock className="size-3" />
+              {formatDuration(routine.estimate)}
+            </span>
+          )}
           {project && !project.isInbox && (
             <span className="truncate"># {project.name}</span>
           )}

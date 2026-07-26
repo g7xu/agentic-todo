@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { DurationPicker } from "@/components/duration-picker";
 import { useCreateRoutine, useUpdateRoutine } from "@/hooks/use-routines";
 import { useTimezone } from "@/components/timezone-context";
 import { todayStr, weekdayOf } from "@/lib/date";
@@ -62,6 +63,9 @@ export function RoutineDialog({
   const [content, setContent] = useState(routine?.content ?? "");
   const [description, setDescription] = useState(routine?.description ?? "");
   const [priority, setPriority] = useState(String(routine?.priority ?? 4));
+  const [estimate, setEstimate] = useState<number | null>(
+    routine?.estimate ?? null,
+  );
   const [projectId, setProjectId] = useState(
     routine?.projectId ?? inbox?.id ?? "",
   );
@@ -116,6 +120,7 @@ export function RoutineDialog({
       content: content.trim(),
       description: description.trim() ? description.trim() : null,
       priority: Number(priority),
+      estimate,
       projectId,
       repeatEvery: everyNum,
       repeatUnit,
@@ -180,6 +185,15 @@ export function RoutineDialog({
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-1.5">
+              {/* Copied into every instance this routine spawns, so recurring
+                  load counts toward day totals without re-estimating it daily
+                  (docs/ESTIMATES.md DE4). */}
+              <Label>Estimate</Label>
+              <DurationPicker value={estimate} onChange={setEstimate} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Project</Label>
               <Select value={projectId} onValueChange={setProjectId}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Clock,
   Flag,
   MoreHorizontal,
   Pause,
@@ -28,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RoutineDialog } from "@/components/routine-dialog";
+import { formatDuration } from "@/lib/duration";
 import { cadenceLabel } from "@/lib/repeat";
 import {
   useDeleteRoutine,
@@ -113,6 +115,12 @@ export default function RoutinesPage() {
                 </span>
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                   <span>{cadenceLabel(r)}</span>
+                  {r.estimate !== null && (
+                    <span className="flex items-center gap-0.5" title="Estimated">
+                      <Clock className="size-3" />
+                      {formatDuration(r.estimate)}
+                    </span>
+                  )}
                   {project && !project.isInbox && <span># {project.name}</span>}
                 </div>
               </div>
