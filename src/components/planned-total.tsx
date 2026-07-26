@@ -29,7 +29,9 @@ export function PlannedTotal({
       className={cn("inline-flex items-center gap-1", className)}
       title={
         unestimated > 0
-          ? `${unestimated} task${unestimated === 1 ? "" : "s"} with no estimate aren't counted`
+          ? unestimated === 1
+            ? "1 task has no estimate and isn't counted"
+            : `${unestimated} tasks have no estimate and aren't counted`
           : undefined
       }
     >
