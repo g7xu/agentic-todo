@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
+import { useRef, useState, type ComponentType } from "react";
 import { Clock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -51,19 +51,32 @@ export function DurationPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  /**
+   * Mirrors `draft` so the close handler reads the latest text. Picking a preset
+   * closes the menu in the same event that sets the draft, and the state value
+   * captured by that render is still the old one — committing it would undo the
+   * preset the user just picked.
+   */
+  const draftRef = useRef("");
 
-  const trimmed = draft.trim();
+  function writeDraft(text: string) {
+    draftRef.current = text;
+    setDraft(text);
+  }
+
   const parsed = parseDuration(draft);
-  const invalid = trimmed !== "" && (parsed === null || parsed > max);
+  const invalid = draft.trim() !== "" && (parsed === null || parsed > max);
 
   /** Commit the typed draft. Empty clears; invalid is refused (returns false). */
   function commitDraft(): boolean {
-    if (trimmed === "") {
+    const text = draftRef.current;
+    if (text.trim() === "") {
       onChange(null);
       return true;
     }
-    if (invalid) return false;
-    onChange(parsed);
+    const minutes = parseDuration(text);
+    if (minutes === null || minutes > max) return false;
+    onChange(minutes);
     return true;
   }
 
@@ -95,7 +108,7 @@ export function DurationPicker({
           // typed-but-abandoned entry never survives into the next visit.
           // Closing commits whatever was typed, so a value doesn't need Enter to
           // stick; an invalid draft is dropped rather than blocking the close.
-          if (next) setDraft(value === null ? "" : formatDuration(value));
+          if (next) writeDraft(value === null ? "" : formatDuration(value));
           else commitDraft();
           setOpen(next);
         }}
@@ -106,7 +119,7 @@ export function DurationPicker({
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           {PRESETS.map((m) => (
-            <DropdownMenuItem key={m} onSelect={() => onChange(m)}>
+            <DropdownMenuItem key={m} onSelect={() => writeDraft(formatDuration(m))}>
               {formatDuration(m)}
             </DropdownMenuItem>
           ))}
@@ -123,7 +136,7 @@ export function DurationPicker({
                 "w-28 bg-transparent text-sm outline-none",
                 invalid && "text-destructive",
               )}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => writeDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
                 e.preventDefault();
@@ -135,7 +148,7 @@ export function DurationPicker({
                 ? parsed !== null && parsed > max
                   ? `Max ${formatDuration(max)}`
                   : "Try 30, 1h30, or 90m"
-                : trimmed === ""
+                : draft.trim() === ""
                   ? "30 · 1h30 · 1.5h · 90m"
                   : formatDuration(parsed!)}
             </p>

@@ -1,0 +1,32 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - main [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]: Sign In
+          - generic [ref=e7]: Enter your email below to login to your account
+        - generic [ref=e8]:
+          - generic [ref=e9]:
+            - generic [ref=e10]:
+              - generic [ref=e11]:
+                - generic [ref=e12]: Email
+                - textbox "Email" [ref=e13]:
+                  - /placeholder: m@example.com
+              - generic [ref=e14]:
+                - generic [ref=e15]:
+                  - generic [ref=e16]: Password
+                  - link "Forgot your password?" [ref=e17] [cursor=pointer]:
+                    - /url: /auth/forgot-password
+                - textbox "Password" [ref=e19]
+              - button "Login" [ref=e20]
+            - button "Sign in with Email Code" [ref=e21]
+          - generic [ref=e22]: Or continue with
+          - button "Sign in with Google" [ref=e26]
+        - generic [ref=e27]:
+          - text: Don't have an account?
+          - link [ref=e28] [cursor=pointer]:
+            - /url: /auth/sign-up
+            - button "Sign Up" [ref=e29]
+    - region "Notifications alt+T"
+  - region "Notifications alt+T"
+  - alert [ref=e30]
