@@ -41,6 +41,7 @@ type RoutineRow = {
   content: string;
   description: string | null;
   priority: number;
+  estimate: number | null;
   projectId: string;
   repeatEvery: number;
   repeatUnit: string;
@@ -57,6 +58,7 @@ const SELECT = {
   content: true,
   description: true,
   priority: true,
+  estimate: true,
   projectId: true,
   repeatEvery: true,
   repeatUnit: true,
@@ -74,6 +76,7 @@ function toDTO(r: RoutineRow): RoutineDTO {
     content: r.content,
     description: r.description,
     priority: r.priority,
+    estimate: r.estimate,
     projectId: r.projectId,
     repeatEvery: r.repeatEvery,
     repeatUnit: isRepeatUnit(r.repeatUnit) ? r.repeatUnit : "day",
@@ -168,6 +171,7 @@ export async function setRoutineDay(
       content: true,
       description: true,
       priority: true,
+      estimate: true,
       repeatEvery: true,
       repeatUnit: true,
       repeatWeekdays: true,
@@ -247,6 +251,7 @@ export async function setRoutineDay(
         content: r.content,
         description: r.description,
         priority: r.priority,
+        estimate: r.estimate,
         dueDate: toDbDate(date),
         order: (max._max.order ?? 0) + 1,
         status,
@@ -262,6 +267,7 @@ export type CreateRoutineInput = {
   content: string;
   description?: string | null;
   priority?: number;
+  estimate?: number | null;
   projectId?: string | null;
   repeatEvery?: number;
   repeatUnit?: RoutineRepeatUnit;
@@ -308,6 +314,7 @@ export async function createRoutine(
       content: input.content,
       description: input.description ?? null,
       priority: input.priority ?? 4,
+      estimate: input.estimate ?? null,
       ...repeat,
       startDate: toDbDate(startDate),
       endDate: input.endDate ? toDbDate(input.endDate) : null,
@@ -321,6 +328,7 @@ export type UpdateRoutineInput = {
   content?: string;
   description?: string | null;
   priority?: number;
+  estimate?: number | null;
   projectId?: string;
   repeatEvery?: number;
   repeatUnit?: RoutineRepeatUnit;
@@ -356,6 +364,7 @@ export async function updateRoutine(
   if (input.content !== undefined) data.content = input.content;
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
+  if (input.estimate !== undefined) data.estimate = input.estimate;
   if (input.projectId !== undefined) data.projectId = input.projectId;
   if (input.endDate !== undefined) {
     data.endDate = input.endDate ? toDbDate(input.endDate) : null;
@@ -429,6 +438,7 @@ export async function completeOccurrence(
       content: true,
       description: true,
       priority: true,
+      estimate: true,
       repeatEvery: true,
       repeatUnit: true,
       repeatWeekdays: true,
@@ -479,6 +489,7 @@ export async function completeOccurrence(
         content: r.content,
         description: r.description,
         priority: r.priority,
+        estimate: r.estimate,
         dueDate: toDbDate(date),
         order: (max._max.order ?? 0) + 1,
         status: "completed",
@@ -567,6 +578,7 @@ export async function materializeRoutines(
       content: true,
       description: true,
       priority: true,
+      estimate: true,
       dueDate: true,
       routine: { select: { active: true } },
     },
@@ -592,6 +604,7 @@ export async function materializeRoutines(
       content: string;
       description: string | null;
       priority: number;
+      estimate: number | null;
       dueDate: Date | null;
       fromRoutineId: string;
     };
@@ -609,6 +622,7 @@ export async function materializeRoutines(
         content: t.content,
         description: t.description,
         priority: t.priority,
+        estimate: t.estimate,
         // Dated the missed day, so it is born overdue rather than mixing into
         // today's list beside today's fresh instance.
         dueDate: t.dueDate,
@@ -656,6 +670,7 @@ export async function materializeRoutines(
       content: true,
       description: true,
       priority: true,
+      estimate: true,
       repeatEvery: true,
       repeatUnit: true,
       repeatWeekdays: true,
@@ -732,6 +747,7 @@ export async function materializeRoutines(
           content: routine.content,
           description: routine.description,
           priority: routine.priority,
+          estimate: routine.estimate,
           dueDate: toDbDate(date),
           status: "missed",
           // 'missed' rows never appear in an ordered list, so they skip the
@@ -824,6 +840,7 @@ export async function materializeRoutines(
         content: r.content,
         description: r.description,
         priority: r.priority,
+        estimate: r.estimate,
         dueDate: todayDb,
         order,
       };

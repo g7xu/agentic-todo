@@ -58,6 +58,7 @@ export type CreateRoutineInput = {
   content: string;
   description?: string | null;
   priority?: number;
+  estimate?: number | null;
   projectId?: string | null;
   repeatEvery?: number;
   repeatUnit?: RoutineRepeatUnit;
@@ -70,6 +71,7 @@ export type UpdateRoutineInput = {
   content?: string;
   description?: string | null;
   priority?: number;
+  estimate?: number | null;
   projectId?: string;
   repeatEvery?: number;
   repeatUnit?: RoutineRepeatUnit;

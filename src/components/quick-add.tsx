@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DurationPicker } from "@/components/duration-picker";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
 import { useCreateTask } from "@/hooks/use-tasks";
@@ -86,6 +87,7 @@ export function QuickAdd({
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState<string | null>(defaultDueDate);
   const [priority, setPriority] = useState<number>(4);
+  const [estimate, setEstimate] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId);
   const nameRef = useRef<HTMLInputElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -157,6 +159,7 @@ export function QuickAdd({
     setDescription("");
     setDueDate(defaultDueDate);
     setPriority(4);
+    setEstimate(null);
     setProjectId(defaultProjectId);
   }
 
@@ -201,10 +204,12 @@ export function QuickAdd({
       description: description.trim() || null,
       priority,
       dueDate,
+      estimate,
       projectId: selectedProject?.id ?? null,
     });
-    // Keep the composer open (and the date/priority/project choices) so
-    // several tasks can be entered in a row, like Todoist.
+    // Keep the composer open (and the date/priority/estimate/project choices) so
+    // several tasks can be entered in a row, like Todoist. The estimate persists
+    // with the rest: tasks entered in a burst tend to be the same rough size.
     setContent("");
     setDescription("");
     nameRef.current?.focus();
@@ -341,6 +346,9 @@ export function QuickAdd({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Estimate */}
+          <DurationPicker value={estimate} onChange={setEstimate} />
         </div>
       </div>
 

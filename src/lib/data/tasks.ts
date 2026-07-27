@@ -9,6 +9,7 @@ type TaskRow = {
   description: string | null;
   priority: number;
   dueDate: Date | null;
+  estimate: number | null;
   timeUsed: number | null;
   status: string;
   order: number;
@@ -24,6 +25,7 @@ const SELECT = {
   description: true,
   priority: true,
   dueDate: true,
+  estimate: true,
   timeUsed: true,
   status: true,
   order: true,
@@ -40,6 +42,7 @@ function toDTO(t: TaskRow): TaskDTO {
     description: t.description,
     priority: t.priority,
     dueDate: dbDateToStr(t.dueDate),
+    estimate: t.estimate,
     timeUsed: t.timeUsed,
     // 'missed' must pass through — coercing it to 'active' would resurrect
     // swept routine instances in Today/overdue (docs/ROUTINES.md §3.3).
@@ -80,6 +83,7 @@ export type CreateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  estimate?: number | null;
   timeUsed?: number | null;
   projectId?: string | null;
 };
@@ -113,6 +117,7 @@ export async function createTask(
       description: input.description ?? null,
       priority: input.priority ?? 4,
       dueDate: input.dueDate ? toDbDate(input.dueDate) : null,
+      estimate: input.estimate ?? null,
       timeUsed: input.timeUsed ?? null,
       order,
     },
@@ -149,6 +154,7 @@ export type UpdateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  estimate?: number | null;
   timeUsed?: number | null;
   projectId?: string;
   order?: number;
@@ -173,6 +179,7 @@ export async function updateTask(
   if (input.content !== undefined) data.content = input.content;
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
+  if (input.estimate !== undefined) data.estimate = input.estimate;
   if (input.timeUsed !== undefined) data.timeUsed = input.timeUsed;
   if (input.projectId !== undefined) data.projectId = input.projectId;
   if (input.order !== undefined) data.order = input.order;

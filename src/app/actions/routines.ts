@@ -38,10 +38,14 @@ function checkEveryWithinUnit(
   }
 }
 
+/** Same 24h cap as a task estimate (docs/ESTIMATES.md DE3). */
+const estimateMin = z.number().int().min(0).max(1440);
+
 const createSchema = z.object({
   content: z.string().trim().min(1).max(500),
   description: z.string().max(5000).nullish(),
   priority: z.number().int().min(1).max(4).optional(),
+  estimate: estimateMin.nullish(),
   projectId: z.string().uuid().nullish(),
   repeatEvery: z.number().int().min(1).max(365).optional(),
   repeatUnit: z.enum(["day", "week", "weekday", "month", "year"]).optional(),
@@ -54,6 +58,7 @@ const updateSchema = z.object({
   content: z.string().trim().min(1).max(500).optional(),
   description: z.string().max(5000).nullable().optional(),
   priority: z.number().int().min(1).max(4).optional(),
+  estimate: estimateMin.nullable().optional(),
   projectId: z.string().uuid().optional(),
   repeatEvery: z.number().int().min(1).max(365).optional(),
   repeatUnit: z.enum(["day", "week", "weekday", "month", "year"]).optional(),

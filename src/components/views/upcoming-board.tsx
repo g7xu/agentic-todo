@@ -20,11 +20,20 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, Clock, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Hourglass,
+  MoreHorizontal,
+  Pencil,
+  Repeat,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { addDays, todayStr } from "@/lib/date";
-import { minutesToHHMM } from "@/lib/duration";
+import { formatDuration } from "@/lib/duration";
+import { PlannedTotal } from "@/components/planned-total";
 import { QuickAdd } from "@/components/quick-add";
 import {
   useCompleteTask,
@@ -183,16 +192,29 @@ function TaskCard({
           </span>
         )}
         {(showDue && task.dueDate) ||
+        task.estimate !== null ||
         task.timeUsed !== null ||
         (project && !project.isInbox) ? (
           <div className="flex items-center gap-2 text-xs">
             {showDue && task.dueDate && (
               <span className="text-red-500">{shortDate(task.dueDate)}</span>
             )}
-            {task.timeUsed !== null && (
-              <span className="text-muted-foreground flex items-center gap-0.5">
+            {task.estimate !== null && (
+              <span
+                className="text-muted-foreground flex items-center gap-0.5"
+                title="Estimated"
+              >
                 <Clock className="size-3" />
-                {minutesToHHMM(task.timeUsed)}
+                {formatDuration(task.estimate)}
+              </span>
+            )}
+            {task.timeUsed !== null && (
+              <span
+                className="text-muted-foreground flex items-center gap-0.5"
+                title="Time used"
+              >
+                <Hourglass className="size-3" />
+                {formatDuration(task.timeUsed)}
               </span>
             )}
             {project && !project.isInbox && (
@@ -306,6 +328,12 @@ function GhostCard({
         </span>
         <div className="text-muted-foreground/70 flex items-center gap-2 text-xs">
           <Repeat className="size-3 shrink-0" />
+          {routine.estimate !== null && (
+            <span className="flex items-center gap-0.5" title="Estimated">
+              <Clock className="size-3" />
+              {formatDuration(routine.estimate)}
+            </span>
+          )}
           {project && !project.isInbox && (
             <span className="truncate"># {project.name}</span>
           )}
@@ -334,15 +362,25 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const isOverdue = date === OVERDUE;
+  // Ghosts count: an unmaterialized occurrence is still work this day will ask
+  // for. Completed tasks don't — "planned" is about what's left.
+  const planned = [
+    ...ids.map((id) => taskById.get(id)).filter((t) => t !== undefined),
+    ...ghosts,
+  ];
   return (
     <div className="flex max-h-full w-64 shrink-0 flex-col">
       <div
         className={cn(
-          "px-1 pb-2 text-sm font-medium",
+          "flex items-baseline justify-between gap-2 px-1 pb-2 text-sm font-medium",
           isOverdue && "text-red-500",
         )}
       >
         {label}
+        <PlannedTotal
+          items={planned}
+          className="text-muted-foreground text-xs font-normal"
+        />
       </div>
       {/* The box hugs its content (columns are `items-start` in the board
           row) but never exceeds the board height (`max-h-full` on the column

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Flag, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
+import {
+  Clock,
+  Flag,
+  Hourglass,
+  MoreHorizontal,
+  Pencil,
+  Repeat,
+  Trash2,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -12,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { todayStr } from "@/lib/date";
-import { minutesToHHMM } from "@/lib/duration";
+import { formatDuration } from "@/lib/duration";
 import {
   useCompleteTask,
   useDeleteTask,
@@ -98,6 +106,7 @@ export function TaskRow({
           {task.content}
         </span>
         {(task.dueDate ||
+          task.estimate !== null ||
           task.timeUsed !== null ||
           task.routineId ||
           (showProject && project && !project.isInbox)) && (
@@ -107,10 +116,24 @@ export function TaskRow({
                 {dueLabel(task.dueDate, today)}
               </span>
             )}
-            {task.timeUsed !== null && (
-              <span className="text-muted-foreground flex items-center gap-0.5">
+            {/* Expected vs. actual get different icons — as two bare durations
+                side by side they'd read as one number (docs/ESTIMATES.md §2). */}
+            {task.estimate !== null && (
+              <span
+                className="text-muted-foreground flex items-center gap-0.5"
+                title="Estimated"
+              >
                 <Clock className="size-3" />
-                {minutesToHHMM(task.timeUsed)}
+                {formatDuration(task.estimate)}
+              </span>
+            )}
+            {task.timeUsed !== null && (
+              <span
+                className="text-muted-foreground flex items-center gap-0.5"
+                title="Time used"
+              >
+                <Hourglass className="size-3" />
+                {formatDuration(task.timeUsed)}
               </span>
             )}
             {task.routineId && (

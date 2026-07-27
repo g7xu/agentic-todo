@@ -17,11 +17,20 @@ const dateStr = z
 /** Total minutes spent; the UI caps input at "99:59". */
 const timeUsedMin = z.number().int().min(0).max(5999);
 
+/**
+ * Expected minutes, capped at 24h — Todoist's cap, and a deliberate nudge to
+ * split anything bigger (docs/ESTIMATES.md DE3). Looser than `timeUsedMin` on
+ * purpose: tightening the stored-actuals bound would make an already-saved
+ * value fail on its next save.
+ */
+const estimateMin = z.number().int().min(0).max(1440);
+
 const createSchema = z.object({
   content: z.string().trim().min(1).max(500),
   description: z.string().max(5000).nullish(),
   priority: z.number().int().min(1).max(4).optional(),
   dueDate: dateStr.nullish(),
+  estimate: estimateMin.nullish(),
   timeUsed: timeUsedMin.nullish(),
   projectId: z.string().uuid().nullish(),
 });
@@ -31,6 +40,7 @@ const updateSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   priority: z.number().int().min(1).max(4).optional(),
   dueDate: dateStr.nullable().optional(),
+  estimate: estimateMin.nullable().optional(),
   timeUsed: timeUsedMin.nullable().optional(),
   projectId: z.string().uuid().optional(),
 });

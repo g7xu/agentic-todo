@@ -19,8 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Hourglass } from "lucide-react";
 import { useUpdateTask } from "@/hooks/use-tasks";
-import { hhmmToMinutes, minutesToHHMM } from "@/lib/duration";
+import { DurationPicker } from "@/components/duration-picker";
 import { insertNewlineAtCursor } from "@/lib/textarea";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
 
@@ -47,21 +48,16 @@ export function EditTaskDialog({
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(String(task.priority));
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
-  const [timeUsed, setTimeUsed] = useState(
-    task.timeUsed === null ? "" : minutesToHHMM(task.timeUsed),
-  );
+  const [estimate, setEstimate] = useState(task.estimate);
+  const [timeUsed, setTimeUsed] = useState(task.timeUsed);
   const [projectId, setProjectId] = useState(task.projectId);
-
-  // Empty clears the field; anything else must parse as "HH:MM".
-  const timeUsedInvalid =
-    timeUsed.trim() !== "" && hhmmToMinutes(timeUsed) === null;
 
   // Routine instances keep their date — each one stands for a specific day
   // (the server rejects reschedules; the field below is read-only for them).
   const isRoutineInstance = task.routineId !== null;
 
   function save() {
-    if (!content.trim() || timeUsedInvalid) return;
+    if (!content.trim()) return;
     update.mutate({
       id: task.id,
       input: {
@@ -69,7 +65,8 @@ export function EditTaskDialog({
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
         ...(isRoutineInstance ? {} : { dueDate: dueDate ? dueDate : null }),
-        timeUsed: hhmmToMinutes(timeUsed),
+        estimate,
+        timeUsed,
         projectId,
       },
     });
@@ -153,16 +150,28 @@ export function EditTaskDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="time-used">Time used</Label>
-              <Input
-                id="time-used"
-                placeholder="00:00"
-                inputMode="numeric"
-                aria-invalid={timeUsedInvalid || undefined}
-                value={timeUsed}
-                onChange={(e) => setTimeUsed(e.target.value)}
+              <Label>Estimate</Label>
+              <DurationPicker
+                value={estimate}
+                onChange={setEstimate}
+                placeholder="Estimate"
               />
             </div>
+            <div className="grid gap-1.5">
+              <Label>Time used</Label>
+              <DurationPicker
+                value={timeUsed}
+                onChange={setTimeUsed}
+                placeholder="Time used"
+                icon={Hourglass}
+                // Actuals keep the looser pre-existing bound; only estimates are
+                // capped at 24h (docs/ESTIMATES.md DE3).
+                max={5999}
+                clearLabel="Clear time used"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Project</Label>
               <Select value={projectId} onValueChange={setProjectId}>
