@@ -580,6 +580,7 @@ export async function materializeRoutines(
       priority: true,
       estimate: true,
       dueDate: true,
+      deadline: true,
       routine: { select: { active: true } },
     },
   });
@@ -606,6 +607,7 @@ export async function materializeRoutines(
       priority: number;
       estimate: number | null;
       dueDate: Date | null;
+      deadline: Date | null;
       fromRoutineId: string;
     };
     const catchUps: CatchUp[] = [];
@@ -623,6 +625,9 @@ export async function materializeRoutines(
         description: t.description,
         priority: t.priority,
         estimate: t.estimate,
+        // Templates carry no deadline; one can only exist here because the user
+        // set it on this instance — losing it would drop a hard date silently.
+        deadline: t.deadline,
         // Dated the missed day, so it is born overdue rather than mixing into
         // today's list beside today's fresh instance.
         dueDate: t.dueDate,

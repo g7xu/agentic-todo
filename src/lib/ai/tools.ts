@@ -76,9 +76,10 @@ export function buildTools(
   return {
     listTasks: tool({
       description:
-        "List the user's tasks by scope. 'today' = active due on/before today (overdue+today); " +
-        "'overdue' = active due before today; 'week' = active due today..+6; 'inbox' = active in Inbox; " +
-        "'all' = all active; 'completed' = completed (newest first).",
+        "List the user's tasks by scope. 'today' = active whose planned date OR deadline is " +
+        "on/before today (overdue+today, matching the Today view); 'overdue' = active whose " +
+        "planned date or deadline is before today; 'week' = active planned today..+6; " +
+        "'inbox' = active in Inbox; 'all' = all active; 'completed' = completed (newest first).",
       inputSchema: z.object({
         scope: z.enum(["today", "overdue", "week", "inbox", "all", "completed"]),
         projectId: z.string().uuid().optional(),
@@ -87,14 +88,21 @@ export function buildTools(
       execute: async ({ scope, projectId, priority }) => {
         const all = await listTasks(userId);
         const weekEnd = addDays(today, 6);
+        // 'today'/'overdue' must agree with the Today VIEW (TDD §6.2), which
+        // surfaces a task when its planned date OR its hard deadline has
+        // arrived (docs/DEADLINES.md) — an arrived deadline can't hide from
+        // chat either. 'week' stays planned-date-only, like the board.
+        const arrived = (t: TaskDTO, before: string) =>
+          (t.dueDate !== null && t.dueDate <= before) ||
+          (t.deadline !== null && t.deadline <= before);
         let rows = all.filter((t) => {
           if (scope === "completed") return t.status === "completed";
           if (t.status !== "active") return false;
           switch (scope) {
             case "today":
-              return t.dueDate !== null && t.dueDate <= today;
+              return arrived(t, today);
             case "overdue":
-              return t.dueDate !== null && t.dueDate < today;
+              return arrived(t, addDays(today, -1));
             case "week":
               return t.dueDate !== null && t.dueDate >= today && t.dueDate <= weekEnd;
             case "inbox":
