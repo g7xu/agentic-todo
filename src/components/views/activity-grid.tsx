@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
-import { addDays, todayStr } from "@/lib/date";
+import { addDays, todayStr, weekdayOf } from "@/lib/date";
 import { cadenceLabel, occurrencesBetween } from "@/lib/repeat";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,17 @@ const WINDOWS = [
   { days: 84, label: "12 weeks" },
   { days: 364, label: "1 year" },
 ];
+
+/**
+ * Days are laid out as calendar columns — one column per week, seven rows for
+ * the weekdays — rather than one long strip. A strip costs 15px per day, so a
+ * year ran ~5,500px wide and every routine had to be scrolled to. Folded into
+ * weeks the same year is ~800px and fits the page.
+ */
+const CELL = 12; // px; matches size-3
+const GAP = 3;
+const COL = CELL + GAP;
+const WEEKDAY_COL = 16; // left gutter holding the M/W/F labels
 
 const CELL_CLASS: Record<Cell, string> = {
   done: "bg-teal-600 dark:bg-teal-500",
@@ -75,6 +86,97 @@ const UNDO_STATUS: Partial<Record<Cell, "completed" | "missed" | "clear">> = {
   norecord: "clear",
 };
 
+/** Sun-first, so the row index is `weekdayOf` unchanged. Only alternate rows
+ * are labelled — three 9px letters is as much as a 12px row pitch can carry. */
+const WEEKDAY_LABELS = ["", "M", "", "W", "", "F", ""];
+
+/**
+ * The calendar frame: a column of weekday letters, a row of month labels, and
+ * the week columns themselves. `leadingPad` blanks the days before the window
+ * started so the first column still lands on the right weekday row.
+ */
+function CalendarGrid({
+  dates,
+  leadingPad,
+  weeks,
+  renderCell,
+}: {
+  dates: string[];
+  leadingPad: number;
+  weeks: number;
+  renderCell: (index: number) => ReactNode;
+}) {
+  // The date a given week column starts on, clamped for the padded first one.
+  const weekStart = (w: number) => dates[Math.max(0, w * 7 - leadingPad)];
+
+  return (
+    <div className="flex gap-1">
+      <div
+        className="text-muted-foreground grid shrink-0 text-[9px] leading-none"
+        style={{
+          width: WEEKDAY_COL,
+          gridTemplateRows: `repeat(7, ${CELL}px)`,
+          gap: GAP,
+        }}
+      >
+        {WEEKDAY_LABELS.map((l, i) => (
+          <span key={i} className="flex items-center">
+            {l}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex flex-col" style={{ gap: GAP }}>
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${weeks}, ${CELL}px)`,
+            gap: GAP,
+            height: CELL,
+          }}
+        >
+          {Array.from({ length: weeks }, (_, w) => {
+            const d = weekStart(w);
+            // A label marks the column where a new month begins. The last two
+            // columns are skipped: the text is wider than its column and would
+            // spill past the right edge with nothing to spill into.
+            const isNew = w === 0 || monthLabel(d) !== monthLabel(weekStart(w - 1));
+            return (
+              <div
+                key={d}
+                className="text-muted-foreground relative text-[10px] leading-none"
+              >
+                {isNew && w < weeks - 2 && (
+                  <span className="absolute top-0 left-0 font-mono">
+                    {monthLabel(d)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Explicit rows + column flow means auto-placement fills each week
+            top-to-bottom before moving right, which is what makes this read
+            as a calendar. */}
+        <div
+          className="grid grid-flow-col"
+          style={{
+            gridTemplateRows: `repeat(7, ${CELL}px)`,
+            gridTemplateColumns: `repeat(${weeks}, ${CELL}px)`,
+            gap: GAP,
+          }}
+        >
+          {Array.from({ length: leadingPad }, (_, i) => (
+            <div key={`pad-${i}`} />
+          ))}
+          {dates.map((_, i) => renderCell(i))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActivityGrid() {
   const tz = useTimezone();
   const today = todayStr(tz);
@@ -113,6 +215,15 @@ export function ActivityGrid() {
       ),
     [today, windowDays],
   );
+
+  // Where the window's first day sits in its week, and how many columns that
+  // makes. Both drive every grid on the page, so they're computed once.
+  const leadingPad = weekdayOf(dates[0]);
+  const weeks = Math.ceil((leadingPad + windowDays) / 7);
+  const gridWidth = weeks * COL - GAP;
+  // Cards are fixed-width so they tile predictably: 12 weeks gives ~4 per row,
+  // a year gives one. Padding (24) + border (2) + gutter (16) + its gap (4).
+  const cardWidth = gridWidth + WEEKDAY_COL + 4 + 26;
 
   // routineId|date -> recorded status. Everything else is derived.
   const recorded = useMemo(() => {
@@ -160,7 +271,7 @@ export function ActivityGrid() {
     });
   }, [routines, dates, recorded, today]);
 
-  // Aggregate strip: share of each day's due routines that were completed.
+  // Aggregate calendar: share of each day's due routines that were completed.
   const summary = useMemo(() => {
     return dates.map((_, i) => {
       let due = 0;
@@ -176,9 +287,8 @@ export function ActivityGrid() {
     });
   }, [rows, dates]);
 
-  // Open on the most recent day. The grid is far wider than the viewport and
-  // scrolls from the left by default, which would land the user three months
-  // in the past — the one stretch of a history view nobody opens it for.
+  // A year of columns is wider than a phone. Nothing scrolls on a laptop, but
+  // when it does, open at the most recent week rather than a year ago.
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scroller.current;
@@ -217,12 +327,15 @@ export function ActivityGrid() {
         </div>
       </div>
 
-      <div ref={scroller} className="overflow-x-auto pb-2">
-        <div className="min-w-min">
-          {/* Aggregate strip, aligned to the same columns as the rows below so
-              a vertical scan lines up across both. */}
-          <div className="mb-1 flex gap-[3px] pl-[164px]">
-            {summary.map((s, i) => {
+      <div ref={scroller} className="overflow-x-auto pb-1">
+        <div className="rounded-lg border p-3" style={{ width: cardWidth }}>
+          <div className="mb-2 text-[13px] font-medium">All routines</div>
+          <CalendarGrid
+            dates={dates}
+            leadingPad={leadingPad}
+            weeks={weeks}
+            renderCell={(i) => {
+              const s = summary[i];
               const share = s.due > 0 ? s.done / s.due : null;
               const cls =
                 share === null
@@ -244,56 +357,66 @@ export function ActivityGrid() {
                       ? `${dayLabel(dates[i])} — ${s.done} of ${s.due} done`
                       : `${dayLabel(dates[i])} — ${s.gap > 0 ? "no record" : "nothing due"}`
                   }
-                  className={cn("size-3 shrink-0 rounded-[2.5px]", cls)}
+                  className={cn("rounded-[2.5px]", cls)}
                 />
               );
-            })}
-          </div>
+            }}
+          />
+        </div>
 
-          <div className="mb-2 flex gap-[3px] pl-[164px]">
-            {dates.map((d, i) => {
-              const first = i === 0 || monthLabel(d) !== monthLabel(dates[i - 1]);
-              return (
-                <div
-                  key={d}
-                  className="text-muted-foreground relative size-3 shrink-0 text-[10px]"
+        <div className="mt-3 flex flex-wrap gap-3">
+          {rows.map(({ routine, cells, done, counted, streak, openEnded }) => (
+            <div
+              key={routine.id}
+              className="rounded-lg border p-3"
+              style={{ width: cardWidth }}
+            >
+              <div className="mb-0.5 flex items-center gap-1">
+                {/* Without this a paused routine reads as one that was simply
+                    abandoned — trailing off into empty cells looks like
+                    failure rather than a deliberate choice. An ended routine
+                    already says so via its cadence label ("… until Jul 8");
+                    paused had no equivalent. */}
+                {!routine.active && (
+                  <span
+                    title="Paused — no new instances spawn, and days after pausing are not recorded"
+                    className="border-muted-foreground/30 text-muted-foreground shrink-0 rounded border px-1 font-mono text-[10px] tracking-wide uppercase"
+                  >
+                    paused
+                  </span>
+                )}
+                <div className="truncate text-[13px] font-medium">
+                  {routine.content}
+                </div>
+              </div>
+              <div className="text-muted-foreground mb-2 flex items-baseline justify-between gap-2 font-mono text-[10px]">
+                <span className="truncate">{cadenceLabel(routine)}</span>
+                {/* Streak counts consecutive OCCURRENCES, not days — a weekly
+                    routine done twice running is a streak of 2, though eight
+                    days separate them. Hence '×2' rather than '2d'. */}
+                <span
+                  className="shrink-0 tabular-nums"
+                  title={
+                    openEnded
+                      ? `${done} completions recorded`
+                      : `${done} of ${counted} recorded days done · ${streak} in a row`
+                  }
                 >
-                  {first && i < dates.length - 4 && (
-                    <span className="absolute top-0 left-0 font-mono">
-                      {monthLabel(d)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  {openEnded
+                    ? `${done} done`
+                    : counted > 0
+                      ? `${Math.round((done / counted) * 100)}% · ×${streak}`
+                      : "—"}
+                </span>
+              </div>
 
-          <div className="flex flex-col gap-[3px]">
-            {rows.map(({ routine, cells, done, counted, streak, openEnded }) => (
-              <div key={routine.id} className="flex items-center gap-[3px]">
-                <div className="bg-background sticky left-0 z-10 w-[164px] shrink-0 pr-3">
-                  <div className="truncate text-[13px] font-medium">
-                    {routine.content}
-                  </div>
-                  <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px]">
-                    {/* Without this a paused routine reads as one that was
-                        simply abandoned — trailing off into empty cells looks
-                        like failure rather than a deliberate choice. An ended
-                        routine already says so via its cadence label
-                        ("… until Jul 8"); paused had no equivalent. */}
-                    {!routine.active && (
-                      <span
-                        title="Paused — no new instances spawn, and days after pausing are not recorded"
-                        className="border-muted-foreground/30 text-muted-foreground shrink-0 rounded border px-1 tracking-wide uppercase"
-                      >
-                        paused
-                      </span>
-                    )}
-                    <span className="truncate">{cadenceLabel(routine)}</span>
-                  </div>
-                </div>
-                {cells.map((c, i) => {
-                  const base = cn("size-3 shrink-0 rounded-[2.5px]", CELL_CLASS[c]);
+              <CalendarGrid
+                dates={dates}
+                leadingPad={leadingPad}
+                weeks={weeks}
+                renderCell={(i) => {
+                  const c = cells[i];
+                  const base = cn("rounded-[2.5px]", CELL_CLASS[c]);
                   const label = `${routine.content} · ${dayLabel(dates[i])} — ${CELL_LABEL[c]}`;
                   // 'not due' days assert nothing, so they stay inert divs —
                   // which also keeps hundreds of empty cells out of the tab
@@ -317,27 +440,10 @@ export function ActivityGrid() {
                       )}
                     />
                   );
-                })}
-                {/* Streak counts consecutive OCCURRENCES, not days — a weekly
-                    routine done twice running is a streak of 2, though eight
-                    days separate them. Hence '×2' rather than '2d'. */}
-                <div
-                  className="text-muted-foreground ml-3 shrink-0 font-mono text-[11px] tabular-nums whitespace-nowrap"
-                  title={
-                    openEnded
-                      ? `${done} completions recorded`
-                      : `${done} of ${counted} recorded days done · ${streak} in a row`
-                  }
-                >
-                  {openEnded
-                    ? `${done} done`
-                    : counted > 0
-                      ? `${Math.round((done / counted) * 100)}% · ×${streak}`
-                      : "—"}
-                </div>
-              </div>
-            ))}
-          </div>
+                }}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
