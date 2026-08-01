@@ -22,6 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Check,
+  ChevronRight,
   Clock,
   Hourglass,
   MoreHorizontal,
@@ -361,6 +362,7 @@ function Column({
   projects: ProjectDTO[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
+  const [showCompleted, setShowCompleted] = useState(false);
   const isOverdue = date === OVERDUE;
   // Ghosts count: an unmaterialized occurrence is still work this day will ask
   // for. Completed tasks don't — "planned" is about what's left.
@@ -414,13 +416,34 @@ function Column({
             <GhostCard key={r.id} routine={r} date={date} projects={projects} />
           ))}
           {/* Completed tasks stay in their day column, crossed out at the
-              bottom; plain cards (no useSortable) so they can't be dragged. */}
-          {completedIds.map((id) => {
-            const task = taskById.get(id);
-            return task ? (
-              <TaskCard key={id} task={task} projects={projects} />
-            ) : null;
-          })}
+              bottom, but folded away behind a count — a busy day's done pile
+              would otherwise bury the work that's left. Plain cards (no
+              useSortable) so they can't be dragged. */}
+          {completedIds.length > 0 && (
+            <>
+              <button
+                type="button"
+                aria-expanded={showCompleted}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 px-1 text-xs"
+                onClick={() => setShowCompleted((s) => !s)}
+              >
+                <ChevronRight
+                  className={cn(
+                    "size-3 transition-transform",
+                    showCompleted && "rotate-90",
+                  )}
+                />
+                {completedIds.length} completed
+              </button>
+              {showCompleted &&
+                completedIds.map((id) => {
+                  const task = taskById.get(id);
+                  return task ? (
+                    <TaskCard key={id} task={task} projects={projects} />
+                  ) : null;
+                })}
+            </>
+          )}
         </div>
         {/* No quick-add in Overdue — new tasks can't be created "overdue". */}
         {!isOverdue && (
