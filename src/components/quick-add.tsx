@@ -187,6 +187,17 @@ export function QuickAdd({
         )
       )
         return;
+      // An open chip dropdown is MODAL: it sets pointer-events:none on the
+      // body, so a press visually inside the card hits <html> and would read
+      // as "outside" — closing the composer and discarding everything typed.
+      // While any floating layer is open, a press's only job is to close that
+      // layer, never the composer (same rule as ui/dialog.tsx).
+      if (
+        document.querySelector(
+          "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
+        )
+      )
+        return;
       closeRef.current();
     }
     window.addEventListener("resize", updateRect);
