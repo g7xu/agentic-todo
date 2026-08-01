@@ -19,8 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Hourglass } from "lucide-react";
-import { useUpdateTask } from "@/hooks/use-tasks";
+import { Check, Hourglass } from "lucide-react";
+import { useCompleteTask, useUpdateTask } from "@/hooks/use-tasks";
 import { DurationPicker } from "@/components/duration-picker";
 import { insertNewlineAtCursor } from "@/lib/textarea";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
@@ -44,6 +44,7 @@ export function EditTaskDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const update = useUpdateTask();
+  const complete = useCompleteTask();
   const [content, setContent] = useState(task.content);
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(String(task.priority));
@@ -56,9 +57,8 @@ export function EditTaskDialog({
   // (the server rejects reschedules; the field below is read-only for them).
   const isRoutineInstance = task.routineId !== null;
 
-  function save() {
-    if (!content.trim()) return;
-    update.mutate({
+  function edits() {
+    return {
       id: task.id,
       input: {
         content: content.trim(),
@@ -69,8 +69,27 @@ export function EditTaskDialog({
         timeUsed,
         projectId,
       },
-    });
+    };
+  }
+
+  function save() {
+    if (!content.trim()) return;
+    update.mutate(edits());
     onOpenChange(false);
+  }
+
+  // Logging time used and ticking the task off is one action in practice, so
+  // the dialog offers it as one button. The edits land first — completing a
+  // task that then fails to save would strand the time used.
+  async function saveAndComplete() {
+    if (!content.trim()) return;
+    onOpenChange(false);
+    try {
+      await update.mutateAsync(edits());
+    } catch {
+      return;
+    }
+    complete.mutate(task.id);
   }
 
   // Enter saves; Cmd/Ctrl+Enter inserts a newline (Shift+Enter keeps the
@@ -193,6 +212,11 @@ export function EditTaskDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
+          {task.status === "active" && (
+            <Button variant="secondary" onClick={saveAndComplete}>
+              <Check className="size-4" /> Save &amp; complete
+            </Button>
+          )}
           <Button onClick={save}>Save</Button>
         </DialogFooter>
       </DialogContent>
