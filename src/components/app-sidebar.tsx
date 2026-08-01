@@ -31,8 +31,8 @@ import {
 } from "@/hooks/use-projects";
 
 const NAV = [
-  { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/upcoming", label: "Upcoming", icon: CalendarClock },
   // Replaced the Completed page (docs/ROUTINES.md §RV8). Completed ordinary
   // tasks remain reachable per project via each project view's "Show
