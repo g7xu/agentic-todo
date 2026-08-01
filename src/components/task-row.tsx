@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Pencil,
   Repeat,
+  Target,
   Trash2,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -68,6 +69,15 @@ export function TaskRow({
 
   const isCompleted = task.status === "completed";
   const overdue = !isCompleted && task.dueDate !== null && task.dueDate < today;
+  // Deadline states: red = the hard date has arrived/passed; amber = the plan
+  // is a lie (planned date lands after the deadline).
+  const deadlineHit =
+    !isCompleted && task.deadline !== null && task.deadline <= today;
+  const planPastDeadline =
+    !isCompleted &&
+    task.deadline !== null &&
+    task.dueDate !== null &&
+    task.dueDate > task.deadline;
   const project = projects.find((p) => p.id === task.projectId);
   const isTemp = task.id.startsWith("temp-");
 
@@ -106,6 +116,7 @@ export function TaskRow({
           {task.content}
         </span>
         {(task.dueDate ||
+          task.deadline ||
           task.estimate !== null ||
           task.timeUsed !== null ||
           task.routineId ||
@@ -114,6 +125,26 @@ export function TaskRow({
             {task.dueDate && (
               <span className={overdue ? "text-red-500" : "text-muted-foreground"}>
                 {dueLabel(task.dueDate, today)}
+              </span>
+            )}
+            {task.deadline && (
+              <span
+                className={cn(
+                  "flex items-center gap-0.5",
+                  deadlineHit
+                    ? "text-red-500"
+                    : planPastDeadline
+                      ? "text-amber-600"
+                      : "text-muted-foreground",
+                )}
+                title={
+                  planPastDeadline
+                    ? "Planned date is after the deadline"
+                    : "Deadline"
+                }
+              >
+                <Target className="size-3" />
+                {dueLabel(task.deadline, today)}
               </span>
             )}
             {/* Expected vs. actual get different icons — as two bare durations

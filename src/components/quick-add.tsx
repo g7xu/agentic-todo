@@ -9,6 +9,7 @@ import {
   Inbox,
   Plus,
   SendHorizontal,
+  Target,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ export function QuickAdd({
   const [content, setContent] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState<string | null>(defaultDueDate);
+  const [deadline, setDeadline] = useState<string | null>(null);
   const [priority, setPriority] = useState<number>(4);
   const [estimate, setEstimate] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId);
@@ -158,6 +160,7 @@ export function QuickAdd({
     setContent("");
     setDescription("");
     setDueDate(defaultDueDate);
+    setDeadline(null);
     setPriority(4);
     setEstimate(null);
     setProjectId(defaultProjectId);
@@ -184,6 +187,17 @@ export function QuickAdd({
         )
       )
         return;
+      // An open chip dropdown is MODAL: it sets pointer-events:none on the
+      // body, so a press visually inside the card hits <html> and would read
+      // as "outside" — closing the composer and discarding everything typed.
+      // While any floating layer is open, a press's only job is to close that
+      // layer, never the composer (same rule as ui/dialog.tsx).
+      if (
+        document.querySelector(
+          "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
+        )
+      )
+        return;
       closeRef.current();
     }
     window.addEventListener("resize", updateRect);
@@ -204,14 +218,19 @@ export function QuickAdd({
       description: description.trim() || null,
       priority,
       dueDate,
+      deadline,
       estimate,
       projectId: selectedProject?.id ?? null,
     });
     // Keep the composer open (and the date/priority/estimate/project choices) so
     // several tasks can be entered in a row, like Todoist. The estimate persists
     // with the rest: tasks entered in a burst tend to be the same rough size.
+    // The DEADLINE deliberately does NOT persist — it's the most task-specific
+    // field, and silently stamping the previous task's hard date onto the next
+    // capture is worse than re-entering it.
     setContent("");
     setDescription("");
+    setDeadline(null);
     nameRef.current?.focus();
   }
 
@@ -317,6 +336,57 @@ export function QuickAdd({
                 aria-label="Clear due date"
                 className="text-muted-foreground hover:text-foreground h-full border-l px-1.5"
                 onClick={() => setDueDate(null)}
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Deadline chip — the HARD date, distinct from the planned date
+              (docs/DEADLINES.md). Same chip anatomy as Date: presets above a
+              raw input, keydown stopped so the menu typeahead doesn't eat it,
+              clear-X as a sibling outside the trigger. */}
+          <div className="flex h-8 items-center rounded-md border">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex h-full items-center gap-1.5 px-2 text-sm",
+                    deadline ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <Target className="size-4" />
+                  {deadline ? dueLabel(deadline, today) : "Deadline"}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => setDeadline(addDays(today, 1))}>
+                  Tomorrow
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setDeadline(addDays(today, 7))}>
+                  In a week
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div
+                  className="px-2 py-1.5"
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="date"
+                    className="bg-transparent text-sm outline-none"
+                    value={deadline ?? ""}
+                    onChange={(e) => setDeadline(e.target.value || null)}
+                  />
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {deadline && (
+              <button
+                type="button"
+                aria-label="Clear deadline"
+                className="text-muted-foreground hover:text-foreground h-full border-l px-1.5"
+                onClick={() => setDeadline(null)}
               >
                 <X className="size-3.5" />
               </button>

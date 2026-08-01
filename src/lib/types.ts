@@ -3,14 +3,15 @@
  * rows never appear in any list. */
 export type TaskStatus = "active" | "completed" | "missed";
 
-/** Client-facing task shape. Dates are strings: `dueDate` is a calendar date
- * ('YYYY-MM-DD'), `completedAt`/`createdAt` are ISO timestamps. */
+/** Client-facing task shape. Dates are strings: `dueDate`/`deadline` are
+ * calendar dates ('YYYY-MM-DD'), `completedAt`/`createdAt` are ISO timestamps. */
 export type TaskDTO = {
   id: string;
   content: string;
   description: string | null;
   priority: number; // 1=p1 (highest) … 4=default
-  dueDate: string | null;
+  dueDate: string | null; // PLANNED date — when the user intends to do it
+  deadline: string | null; // hard deadline (docs/DEADLINES.md); never moved by drag/reschedule
   estimate: number | null; // expected minutes (docs/ESTIMATES.md)
   timeUsed: number | null; // minutes actually spent
   status: TaskStatus;

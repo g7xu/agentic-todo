@@ -47,6 +47,7 @@ function brief(t: TaskDTO) {
     id: t.id,
     content: t.content,
     dueDate: t.dueDate,
+    deadline: t.deadline,
     priority: t.priority,
     // Readable as well as writable on purpose: a field the model can set but
     // never see back is one it overwrites blind (docs/ESTIMATES.md §3.6).
@@ -75,9 +76,10 @@ export function buildTools(
   return {
     listTasks: tool({
       description:
-        "List the user's tasks by scope. 'today' = active due on/before today (overdue+today); " +
-        "'overdue' = active due before today; 'week' = active due today..+6; 'inbox' = active in Inbox; " +
-        "'all' = all active; 'completed' = completed (newest first).",
+        "List the user's tasks by scope. 'today' = active whose planned date OR deadline is " +
+        "on/before today (overdue+today, matching the Today view); 'overdue' = active whose " +
+        "planned date or deadline is before today; 'week' = active planned today..+6; " +
+        "'inbox' = active in Inbox; 'all' = all active; 'completed' = completed (newest first).",
       inputSchema: z.object({
         scope: z.enum(["today", "overdue", "week", "inbox", "all", "completed"]),
         projectId: z.string().uuid().optional(),
@@ -86,14 +88,21 @@ export function buildTools(
       execute: async ({ scope, projectId, priority }) => {
         const all = await listTasks(userId);
         const weekEnd = addDays(today, 6);
+        // 'today'/'overdue' must agree with the Today VIEW (TDD §6.2), which
+        // surfaces a task when its planned date OR its hard deadline has
+        // arrived (docs/DEADLINES.md) — an arrived deadline can't hide from
+        // chat either. 'week' stays planned-date-only, like the board.
+        const arrived = (t: TaskDTO, before: string) =>
+          (t.dueDate !== null && t.dueDate <= before) ||
+          (t.deadline !== null && t.deadline <= before);
         let rows = all.filter((t) => {
           if (scope === "completed") return t.status === "completed";
           if (t.status !== "active") return false;
           switch (scope) {
             case "today":
-              return t.dueDate !== null && t.dueDate <= today;
+              return arrived(t, today);
             case "overdue":
-              return t.dueDate !== null && t.dueDate < today;
+              return arrived(t, addDays(today, -1));
             case "week":
               return t.dueDate !== null && t.dueDate >= today && t.dueDate <= weekEnd;
             case "inbox":
@@ -127,6 +136,9 @@ export function buildTools(
     createTask: tool({
       description:
         "Create a task. Omit dueDate for no date; omit projectId to use Inbox. " +
+        "`dueDate` is the PLANNED date (when the user intends to do it); `deadline` is the " +
+        "HARD date it's actually due — set deadline only when the user states a real deadline " +
+        "('due Friday', 'must be done by...'), never inferred. " +
         "`estimate` is expected minutes (max 1440) — set it when the user says or implies " +
         "how long the work takes; omit it rather than guessing.",
       inputSchema: z.object({
@@ -134,6 +146,7 @@ export function buildTools(
         description: z.string().max(5000).nullish(),
         priority: z.number().int().min(1).max(4).optional(),
         dueDate: dateStr.nullish(),
+        deadline: dateStr.nullish(),
         estimate: estimateMin.nullish(),
         projectId: z.string().uuid().nullish(),
       }),
@@ -142,14 +155,16 @@ export function buildTools(
 
     updateTask: tool({
       description:
-        "Update a task's non-date fields (content/description/priority/estimate/project). " +
-        "For a date-only change use rescheduleTask instead. `estimate` is expected minutes " +
-        "(max 1440); pass null to clear it.",
+        "Update a task's fields (content/description/priority/estimate/project/deadline). " +
+        "For a PLANNED-date change use rescheduleTask instead. `deadline` is the hard date " +
+        "the task is actually due — set/clear it only on the user's say-so (null clears). " +
+        "`estimate` is expected minutes (max 1440); pass null to clear it.",
       inputSchema: z.object({
         id: z.string().uuid(),
         content: z.string().min(1).max(500).optional(),
         description: z.string().max(5000).nullable().optional(),
         priority: z.number().int().min(1).max(4).optional(),
+        deadline: dateStr.nullable().optional(),
         estimate: estimateMin.nullable().optional(),
         projectId: z.string().uuid().optional(),
       }),
@@ -160,7 +175,8 @@ export function buildTools(
     }),
 
     rescheduleTask: tool({
-      description: "Change only a task's due date.",
+      description:
+        "Change only a task's PLANNED date (dueDate). Never touches the deadline.",
       inputSchema: z.object({ id: z.string().uuid(), dueDate: dateStr }),
       execute: async ({ id, dueDate }) => {
         if (guard.blocked("rescheduleTask")) return blockedResult("rescheduleTask", "bulkReschedule");

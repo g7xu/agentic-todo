@@ -45,6 +45,7 @@ export type CreateInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  deadline?: string | null;
   estimate?: number | null;
   timeUsed?: number | null;
   projectId?: string | null;
@@ -62,6 +63,7 @@ export function useCreateTask() {
         description: input.description ?? null,
         priority: input.priority ?? 4,
         dueDate: input.dueDate ?? null,
+        deadline: input.deadline ?? null,
         estimate: input.estimate ?? null,
         timeUsed: input.timeUsed ?? null,
         status: "active",
@@ -95,6 +97,7 @@ export function useUpdateTask() {
         description: input.description,
         priority: input.priority,
         dueDate: input.dueDate,
+        deadline: input.deadline,
         estimate: input.estimate,
         timeUsed: input.timeUsed,
         projectId: input.projectId,
