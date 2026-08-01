@@ -49,6 +49,7 @@ export function EditTaskDialog({
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(String(task.priority));
   const [dueDate, setDueDate] = useState(task.dueDate ?? "");
+  const [deadline, setDeadline] = useState(task.deadline ?? "");
   const [estimate, setEstimate] = useState(task.estimate);
   const [timeUsed, setTimeUsed] = useState(task.timeUsed);
   const [projectId, setProjectId] = useState(task.projectId);
@@ -65,6 +66,7 @@ export function EditTaskDialog({
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
         ...(isRoutineInstance ? {} : { dueDate: dueDate ? dueDate : null }),
+        deadline: deadline ? deadline : null,
         estimate,
         timeUsed,
         projectId,
@@ -152,19 +154,15 @@ export function EditTaskDialog({
               )}
             </div>
             <div className="grid gap-1.5">
-              <Label>Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIORITIES.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="deadline">Deadline</Label>
+              {/* The hard date — editable on any task, routine instances
+                  included; only the planned date beside it is locked for those. */}
+              <Input
+                id="deadline"
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -201,6 +199,21 @@ export function EditTaskDialog({
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Priority</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITIES.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

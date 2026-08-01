@@ -9,6 +9,7 @@ type TaskRow = {
   description: string | null;
   priority: number;
   dueDate: Date | null;
+  deadline: Date | null;
   estimate: number | null;
   timeUsed: number | null;
   status: string;
@@ -25,6 +26,7 @@ const SELECT = {
   description: true,
   priority: true,
   dueDate: true,
+  deadline: true,
   estimate: true,
   timeUsed: true,
   status: true,
@@ -42,6 +44,7 @@ function toDTO(t: TaskRow): TaskDTO {
     description: t.description,
     priority: t.priority,
     dueDate: dbDateToStr(t.dueDate),
+    deadline: dbDateToStr(t.deadline),
     estimate: t.estimate,
     timeUsed: t.timeUsed,
     // 'missed' must pass through — coercing it to 'active' would resurrect
@@ -83,6 +86,7 @@ export type CreateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  deadline?: string | null;
   estimate?: number | null;
   timeUsed?: number | null;
   projectId?: string | null;
@@ -117,6 +121,7 @@ export async function createTask(
       description: input.description ?? null,
       priority: input.priority ?? 4,
       dueDate: input.dueDate ? toDbDate(input.dueDate) : null,
+      deadline: input.deadline ? toDbDate(input.deadline) : null,
       estimate: input.estimate ?? null,
       timeUsed: input.timeUsed ?? null,
       order,
@@ -154,6 +159,7 @@ export type UpdateTaskInput = {
   description?: string | null;
   priority?: number;
   dueDate?: string | null;
+  deadline?: string | null;
   estimate?: number | null;
   timeUsed?: number | null;
   projectId?: string;
@@ -179,6 +185,11 @@ export async function updateTask(
   if (input.content !== undefined) data.content = input.content;
   if (input.description !== undefined) data.description = input.description;
   if (input.priority !== undefined) data.priority = input.priority;
+  // The deadline is an ordinary editable field on any task, routine instances
+  // included — only the PLANNED date is locked for those (below).
+  if (input.deadline !== undefined) {
+    data.deadline = input.deadline ? toDbDate(input.deadline) : null;
+  }
   if (input.estimate !== undefined) data.estimate = input.estimate;
   if (input.timeUsed !== undefined) data.timeUsed = input.timeUsed;
   if (input.projectId !== undefined) data.projectId = input.projectId;

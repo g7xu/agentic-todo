@@ -28,6 +28,7 @@ import {
   MoreHorizontal,
   Pencil,
   Repeat,
+  Target,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -125,10 +126,21 @@ function TaskCard({
   const uncomplete = useUncompleteTask();
   const del = useDeleteTask();
   const [editing, setEditing] = useState(false);
+  const tz = useTimezone();
+  const today = todayStr(tz);
 
   const project = projects.find((p) => p.id === task.projectId);
   const isTemp = task.id.startsWith("temp-");
   const isCompleted = task.status === "completed";
+  // Deadline states, mirrored from task-row: red = hard date arrived/passed;
+  // amber = planned date lands after the deadline.
+  const deadlineHit =
+    !isCompleted && task.deadline !== null && task.deadline <= today;
+  const planPastDeadline =
+    !isCompleted &&
+    task.deadline !== null &&
+    task.dueDate !== null &&
+    task.dueDate > task.deadline;
 
   // Click-to-edit that coexists with drag: a press that travels further than
   // the drag activation distance (5px) was a drag, not a click — the browser
@@ -193,12 +205,33 @@ function TaskCard({
           </span>
         )}
         {(showDue && task.dueDate) ||
+        task.deadline !== null ||
         task.estimate !== null ||
         task.timeUsed !== null ||
         (project && !project.isInbox) ? (
           <div className="flex items-center gap-2 text-xs">
             {showDue && task.dueDate && (
               <span className="text-red-500">{shortDate(task.dueDate)}</span>
+            )}
+            {task.deadline !== null && (
+              <span
+                className={cn(
+                  "flex items-center gap-0.5",
+                  deadlineHit
+                    ? "text-red-500"
+                    : planPastDeadline
+                      ? "text-amber-600"
+                      : "text-muted-foreground",
+                )}
+                title={
+                  planPastDeadline
+                    ? "Planned date is after the deadline"
+                    : "Deadline"
+                }
+              >
+                <Target className="size-3" />
+                {shortDate(task.deadline)}
+              </span>
             )}
             {task.estimate !== null && (
               <span

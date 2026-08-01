@@ -7,6 +7,7 @@ import { useTimezone } from "@/components/timezone-context";
 import { todayStr } from "@/lib/date";
 import { useTasks } from "@/hooks/use-tasks";
 import { useProjects } from "@/hooks/use-projects";
+import type { TaskDTO } from "@/lib/types";
 
 export default function TodayPage() {
   const tz = useTimezone();
@@ -14,20 +15,31 @@ export default function TodayPage() {
   const { data: tasks = [], isLoading, isError, refetch } = useTasks();
   const { data: projects = [] } = useProjects();
 
+  // A task belongs in Today when its planned date has arrived OR its hard
+  // deadline has (docs/DEADLINES.md) — a deadline must be un-ignorable, even
+  // on a task with no planned date. Returns the earliest arrived date, which
+  // is also the sort/bucket key below.
+  function urgentDate(t: TaskDTO): string | null {
+    const arrived = [t.dueDate, t.deadline].filter(
+      (d): d is string => d !== null && d <= today,
+    );
+    return arrived.length === 0 ? null : arrived.sort()[0];
+  }
+
   const due = tasks.filter(
-    (t) => t.status === "active" && t.dueDate !== null && t.dueDate <= today,
+    (t) => t.status === "active" && urgentDate(t) !== null,
   );
-  // Overdue: oldest-overdue-first by due date, then order/created/id (TDD §5).
+  // Overdue: oldest-overdue-first by urgent date, then order/created/id (TDD §5).
   const overdue = due
-    .filter((t) => t.dueDate! < today)
+    .filter((t) => urgentDate(t)! < today)
     .sort(
       (a, b) =>
-        a.dueDate!.localeCompare(b.dueDate!) ||
+        urgentDate(a)!.localeCompare(urgentDate(b)!) ||
         a.order - b.order ||
         a.createdAt.localeCompare(b.createdAt),
     );
   const dueToday = due
-    .filter((t) => t.dueDate === today)
+    .filter((t) => urgentDate(t) === today)
     .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
 
   return (

@@ -47,6 +47,7 @@ function brief(t: TaskDTO) {
     id: t.id,
     content: t.content,
     dueDate: t.dueDate,
+    deadline: t.deadline,
     priority: t.priority,
     // Readable as well as writable on purpose: a field the model can set but
     // never see back is one it overwrites blind (docs/ESTIMATES.md §3.6).
@@ -127,6 +128,9 @@ export function buildTools(
     createTask: tool({
       description:
         "Create a task. Omit dueDate for no date; omit projectId to use Inbox. " +
+        "`dueDate` is the PLANNED date (when the user intends to do it); `deadline` is the " +
+        "HARD date it's actually due — set deadline only when the user states a real deadline " +
+        "('due Friday', 'must be done by...'), never inferred. " +
         "`estimate` is expected minutes (max 1440) — set it when the user says or implies " +
         "how long the work takes; omit it rather than guessing.",
       inputSchema: z.object({
@@ -134,6 +138,7 @@ export function buildTools(
         description: z.string().max(5000).nullish(),
         priority: z.number().int().min(1).max(4).optional(),
         dueDate: dateStr.nullish(),
+        deadline: dateStr.nullish(),
         estimate: estimateMin.nullish(),
         projectId: z.string().uuid().nullish(),
       }),
@@ -142,14 +147,16 @@ export function buildTools(
 
     updateTask: tool({
       description:
-        "Update a task's non-date fields (content/description/priority/estimate/project). " +
-        "For a date-only change use rescheduleTask instead. `estimate` is expected minutes " +
-        "(max 1440); pass null to clear it.",
+        "Update a task's fields (content/description/priority/estimate/project/deadline). " +
+        "For a PLANNED-date change use rescheduleTask instead. `deadline` is the hard date " +
+        "the task is actually due — set/clear it only on the user's say-so (null clears). " +
+        "`estimate` is expected minutes (max 1440); pass null to clear it.",
       inputSchema: z.object({
         id: z.string().uuid(),
         content: z.string().min(1).max(500).optional(),
         description: z.string().max(5000).nullable().optional(),
         priority: z.number().int().min(1).max(4).optional(),
+        deadline: dateStr.nullable().optional(),
         estimate: estimateMin.nullable().optional(),
         projectId: z.string().uuid().optional(),
       }),
@@ -160,7 +167,8 @@ export function buildTools(
     }),
 
     rescheduleTask: tool({
-      description: "Change only a task's due date.",
+      description:
+        "Change only a task's PLANNED date (dueDate). Never touches the deadline.",
       inputSchema: z.object({ id: z.string().uuid(), dueDate: dateStr }),
       execute: async ({ id, dueDate }) => {
         if (guard.blocked("rescheduleTask")) return blockedResult("rescheduleTask", "bulkReschedule");
