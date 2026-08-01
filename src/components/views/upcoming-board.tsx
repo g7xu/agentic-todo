@@ -319,6 +319,17 @@ function SortableTask({
       )}
       {...attributes}
       {...listeners}
+      onPointerDown={(e) => {
+        // The edit dialog is portaled but renders inside this component tree,
+        // so its pointer events BUBBLE here in React and would arm the drag
+        // sensor — press a non-interactive spot in the dialog, drift 5px, and
+        // the card behind it gets dragged (closing the dialog unsaved and
+        // rescheduling the task on drop). Same physical-containment guard as
+        // TaskCard's click-to-edit: only presses actually inside the card may
+        // start a drag.
+        if (!e.currentTarget.contains(e.target as Node)) return;
+        listeners?.onPointerDown?.(e);
+      }}
     >
       <TaskCard task={task} projects={projects} showDue={showDue} />
     </div>
