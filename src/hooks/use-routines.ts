@@ -10,11 +10,13 @@ import type {
   RoutineDTO,
   RoutineRepeatBase,
   RoutineRepeatUnit,
+  TaskDTO,
 } from "@/lib/types";
 import {
   completeRoutineOccurrenceAction,
   createRoutineAction,
   deleteRoutineAction,
+  materializeRoutineOccurrenceAction,
   setRoutineDayAction,
   updateRoutineAction,
 } from "@/app/actions/routines";
@@ -130,6 +132,27 @@ export function useCompleteRoutineOccurrence() {
     mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
       completeRoutineOccurrenceAction(routineId, date),
     onError: reportError("Couldn’t complete that occurrence"),
+    onSettled: invalidate,
+  });
+}
+
+/** Turn an Upcoming ghost into a real, still-to-do task (§RV10). The created
+ * task is written straight into the ['tasks'] cache so the card appears in
+ * place of the ghost without waiting for the refetch, and returned to the
+ * caller so it can open the editor on it. */
+export function useMaterializeRoutineOccurrence() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateBoth();
+  return useMutation({
+    mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
+      materializeRoutineOccurrenceAction(routineId, date),
+    onSuccess: (task) => {
+      qc.setQueryData<TaskDTO[]>(TASKS_KEY, (old = []) =>
+        // A lost race returns the row that already existed — don't double it.
+        old.some((t) => t.id === task.id) ? old : [...old, task],
+      );
+    },
+    onError: reportError("Couldn’t add that occurrence"),
     onSettled: invalidate,
   });
 }

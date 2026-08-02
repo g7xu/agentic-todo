@@ -1,5 +1,5 @@
 /**
- * Seed a set of routine scenarios for manual testing (docs/ROUTINES.md §RV5-RV9).
+ * Seed a set of routine scenarios for manual testing (docs/ROUTINES.md §RV5-RV10).
  *
  *   npm run demo:seed     create everything
  *   npm run demo:clean    remove everything it created
@@ -54,8 +54,6 @@ type Scenario = {
   active?: boolean;
   /** Decides each due day. `ago` is days before today, so 0 is today. */
   outcome: (ago: number) => Outcome;
-  /** Leave an unfinished catch-up task outstanding (§RV7). */
-  catchUp?: boolean;
   /** Complete an occurrence this many days AHEAD of today (§RV6). */
   completeAhead?: number;
 };
@@ -104,14 +102,13 @@ const SCENARIOS: Scenario[] = [
   },
   {
     content: "Water plants",
-    note: "weekly on Tue — sparse row, and an outstanding catch-up task",
+    note: "weekly on Tue — sparse row, recent misses left as history only",
     repeatUnit: "week",
     repeatEvery: 1,
     repeatWeekdays: [2],
     repeatBase: "scheduled",
     startedDaysAgo: 75,
     outcome: (ago) => (ago <= 7 ? "missed" : rnd() < 0.8 ? "done" : "missed"),
-    catchUp: true,
   },
   {
     content: "Pay rent",
@@ -300,24 +297,6 @@ async function seedAll(userId: string, tz: string) {
         skipDuplicates: true,
       });
       rows += data.length;
-    }
-
-    if (s.catchUp) {
-      // An ordinary task: routineId NULL so it is freely reschedulable,
-      // fromRoutineId set so the one-outstanding guard sees it (§RV7).
-      await prisma.task.create({
-        data: {
-          userId,
-          projectId: project.id,
-          fromRoutineId: routine.id,
-          content: s.content,
-          priority: 4,
-          dueDate: toDbDate(addDays(today, -7)),
-          status: "active",
-          order: ++order,
-        },
-      });
-      rows++;
     }
 
     console.log(`  ${s.content.padEnd(18)} ${s.note}`);
