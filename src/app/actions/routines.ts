@@ -8,10 +8,11 @@ import {
   createRoutine,
   deleteRoutine,
   listRoutines,
+  materializeOccurrence,
   setRoutineDay,
   updateRoutine,
 } from "@/lib/data/routines";
-import type { RoutineDTO } from "@/lib/types";
+import type { RoutineDTO, TaskDTO } from "@/lib/types";
 
 const dateStr = z
   .string()
@@ -98,6 +99,21 @@ export async function completeRoutineOccurrenceAction(
 ): Promise<void> {
   const user = await requireUser();
   await completeOccurrence(
+    user.id,
+    z.string().uuid().parse(routineId),
+    dateStr.parse(date),
+  );
+}
+
+/** Turn a projected future occurrence into a real, still-to-do task from the
+ * Upcoming board (§RV10). All the real guarding lives in
+ * `materializeOccurrence` — this only shapes input. */
+export async function materializeRoutineOccurrenceAction(
+  routineId: string,
+  date: string,
+): Promise<TaskDTO> {
+  const user = await requireUser();
+  return materializeOccurrence(
     user.id,
     z.string().uuid().parse(routineId),
     dateStr.parse(date),

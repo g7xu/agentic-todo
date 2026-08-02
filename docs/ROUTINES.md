@@ -55,6 +55,46 @@ conflict with these, **these win** (kept for history rather than rewritten):
   had nothing to show; `listTasks` no longer returns `missed` rows at all). `status = 'missed'`
   survives only as an internal parking state: leftovers of **paused** routines (so they don't
   follow the user around while paused) and rare carry collisions.
+- **RV10 — A ghost is clickable, and a missed routine leaves only a record (2026-08-02).** Two
+  owner-requested changes to how a routine occurrence enters and leaves the board.
+
+  **A. Clicking a ghost materializes it.** RV6 gave ghost cards exactly one gesture — tick the
+  circle to complete ahead of time — and left the rest of the card inert, so the one occurrence you
+  could see coming was the one you could not size, annotate, or re-prioritize. Clicking anywhere
+  else on a ghost now calls `materializeOccurrence`, which is `completeOccurrence` with
+  `status: 'active'` instead of `'completed'` (both are thin wrappers over one guarded
+  `createOccurrence`, so the RV6 guards — owned, active, scheduled-based, on-cadence, not in the
+  past — apply unchanged). The row is created on **its own date**, and the board opens the edit
+  dialog on it. What you get is an ordinary routine instance, identical to the one that day's spawn
+  would have produced: editable, completable, deletable, and date-locked by RV1. DR2 is untouched —
+  nothing is pre-spawned; the row exists because the user acted.
+
+  The editor is mounted on the **board**, not inside `GhostCard`: the instant the task exists the
+  ghost stops being projected and unmounts, taking any dialog rendered inside it with it.
+
+  **Engine consequence — the spawn check narrows to today-exact.** Step 3 previously skipped a
+  routine that had any instance dated **today or later**, which would let one materialized Thursday
+  suppress Tuesday's and Wednesday's spawns entirely — the routine silently stops. RV6's "each day
+  stands alone" has to hold in the engine, so the check is now "no row dated today". The old form
+  existed to absorb a future-dated instance after a westward timezone change; that case now yields
+  one extra instance on the replayed day, which is far cheaper than days of missing ones.
+
+  **B. A missed occurrence disappears; the catch-up task is gone (supersedes RV7's phase 2).**
+  Retire still flips the stale instance to `missed` with its date frozen — the record RV7 was
+  built to protect is kept, and the Activity grid is unchanged. What is removed is the second row:
+  no ordinary catch-up task (`fromRoutineId`) is minted any more, so a routine day you let pass
+  leaves the views entirely instead of reappearing as overdue work under the same name. Owner-
+  decided: a missed day of a recurring thing is a missed day, not a debt — the next occurrence is
+  already coming, and the catch-up mostly produced a pile that looked like the routine had failed
+  twice. With nothing minted for anyone, RV7's paused-routine special case and its
+  one-outstanding-catch-up guard both fall away, and retire collapses to a single `updateMany`.
+
+  `Task.fromRoutineId` stays in the schema — no migration. Nothing writes it now; it still carries
+  the provenance of catch-ups minted before this change, and those rows are left alone (deleting
+  live tasks the user may have replanned would be worse than leaving them). Triage's
+  `isRoutineCatchUp` signal (TRIAGE.md §3.3) therefore still reads a real column, but on a set that
+  can only shrink.
+
 - **RV9 — History is correctable, and gaps are backfilled (2026-07-18).** Two halves that only make
   sense together, shipped in that order.
 
@@ -120,6 +160,7 @@ conflict with these, **these win** (kept for history rather than rewritten):
   off mid-morning would be a lie. The grid opens scrolled to the most recent day.
 
 - **RV7 — A missed day is recorded, and the work becomes a replannable task (2026-07-18).**
+  **Half superseded by RV10 (2026-08-02): the `missed` record stays, the catch-up task is gone.**
   Phases 1–2 BUILT (migration `routine_catch_up_tasks`); phase 3 (per-routine history view) not
   started. Reverses RV2's always-carry. Owner-decided after RV2's cost surfaced: carry
   rewrites `dueDate`, the only field recording which day an occurrence was *for*, so the per-day

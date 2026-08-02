@@ -238,6 +238,11 @@ export async function deleteTask(
   return r.count > 0;
 }
 
+/** The task read shape and its mapper, shared with `lib/data/routines.ts`: a
+ * routine instance created there must come back in exactly the DTO shape every
+ * other task read produces, or the client cache ends up holding two shapes. */
+export { SELECT as TASK_SELECT, toDTO as taskToDTO };
+
 export type BulkResult = {
   applied: string[];
   skipped: { id: string; reason: string }[];

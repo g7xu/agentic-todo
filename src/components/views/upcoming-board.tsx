@@ -47,6 +47,7 @@ import {
 import { useProjects } from "@/hooks/use-projects";
 import {
   useCompleteRoutineOccurrence,
+  useMaterializeRoutineOccurrence,
   useRoutines,
 } from "@/hooks/use-routines";
 import { occurrencesBetween } from "@/lib/repeat";
@@ -339,33 +340,55 @@ function SortableTask({
 /**
  * A routine occurrence that has not been materialized yet — a projection, not
  * a task (docs/ROUTINES.md §RV5). Dashed throughout to signal "no row behind
- * this yet". The one thing it can do is be completed ahead of time (§RV6),
- * which creates the row on its own date already done. Still not draggable or
- * editable: there is nothing to reorder, and RV1 locks instance dates anyway.
+ * this yet". Two things can happen to it, and both create the real row on its
+ * own date: ticking the circle completes it ahead of time (§RV6), and clicking
+ * anywhere else materializes it as ordinary to-do work (§RV10), which is what
+ * makes it editable — a projection has nothing to edit. The card is still not
+ * draggable: once real, RV1 locks instance dates anyway.
  */
 function GhostCard({
   routine,
   date,
   projects,
+  onMaterialize,
 }: {
   routine: RoutineDTO;
   date: string;
   projects: ProjectDTO[];
+  /** Called with the freshly created task so the board can open its editor. */
+  onMaterialize: (task: TaskDTO) => void;
 }) {
   const complete = useCompleteRoutineOccurrence();
+  const materialize = useMaterializeRoutineOccurrence();
+  const busy = complete.isPending || materialize.isPending;
   const project = projects.find((p) => p.id === routine.projectId);
   return (
-    <div className="bg-card/40 flex items-start gap-2 rounded-md border border-dashed p-2 text-sm">
+    <div
+      className={cn(
+        "bg-card/40 hover:bg-accent/40 flex cursor-pointer items-start gap-2 rounded-md border border-dashed p-2 text-sm transition-colors",
+        busy && "pointer-events-none opacity-60",
+      )}
+      title="Not created yet — click to add it to this day"
+      onClick={() =>
+        materialize.mutate(
+          { routineId: routine.id, date },
+          { onSuccess: onMaterialize },
+        )
+      }
+    >
       <button
         type="button"
-        disabled={complete.isPending}
+        disabled={busy}
         aria-label={`Complete "${routine.content}" ahead of time`}
         title="Complete ahead of time"
         className={cn(
           "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed disabled:opacity-40",
           PRIORITY_CIRCLE[routine.priority],
         )}
-        onClick={() => complete.mutate({ routineId: routine.id, date })}
+        onClick={(e) => {
+          e.stopPropagation(); // ticking it off must not also materialize it
+          complete.mutate({ routineId: routine.id, date });
+        }}
       />
       <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
         <span className="text-muted-foreground truncate">
@@ -396,6 +419,7 @@ function Column({
   ghosts,
   taskById,
   projects,
+  onMaterialize,
 }: {
   date: string;
   label: string;
@@ -404,6 +428,7 @@ function Column({
   ghosts: RoutineDTO[];
   taskById: Map<string, TaskDTO>;
   projects: ProjectDTO[];
+  onMaterialize: (task: TaskDTO) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const [showCompleted, setShowCompleted] = useState(false);
@@ -457,7 +482,13 @@ function Column({
               can act on yet, just a heads-up that the day isn't as empty as it
               looks. Outside SortableContext so drags ignore them entirely. */}
           {ghosts.map((r) => (
-            <GhostCard key={r.id} routine={r} date={date} projects={projects} />
+            <GhostCard
+              key={r.id}
+              routine={r}
+              date={date}
+              projects={projects}
+              onMaterialize={onMaterialize}
+            />
           ))}
           {/* Completed tasks stay in their day column, crossed out at the
               bottom, but folded away behind a count — a busy day's done pile
@@ -516,6 +547,10 @@ export function UpcomingBoard() {
   const [horizon, setHorizon] = useState(7);
   const [items, setItems] = useState<Items>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  // The editor for a just-materialized ghost (§RV10) lives HERE, not in the
+  // GhostCard: the moment the task exists the ghost stops being projected and
+  // unmounts, which would take a dialog rendered inside it down with it.
+  const [materialized, setMaterialized] = useState<TaskDTO | null>(null);
 
   const dates = useMemo(
     () => Array.from({ length: horizon }, (_, i) => addDays(today, i)),
@@ -729,6 +764,7 @@ export function UpcomingBoard() {
               ghosts={[]}
               taskById={taskById}
               projects={projects}
+              onMaterialize={setMaterialized}
             />
           )}
           {dates.map((date) => (
@@ -741,6 +777,7 @@ export function UpcomingBoard() {
               ghosts={ghostsByDate[date] ?? []}
               taskById={taskById}
               projects={projects}
+              onMaterialize={setMaterialized}
             />
           ))}
           <div className="flex w-40 shrink-0 items-start pt-7">
@@ -758,6 +795,18 @@ export function UpcomingBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      {/* Outside the DndContext on purpose: a dialog rendered inside a column
+          bubbles its pointer events through the sortable above it. */}
+      {materialized && (
+        <EditTaskDialog
+          task={materialized}
+          projects={projects}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMaterialized(null);
+          }}
+        />
+      )}
     </div>
   );
 }

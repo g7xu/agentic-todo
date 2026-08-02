@@ -44,9 +44,11 @@ verdict (see DL3), and the classifier can tell "dodged but harmless" from "dodge
   `listTasks`. The `week` scope stays planned-date-only, mirroring the board, which is a planning
   surface keyed on `dueDate` — deadline-only tasks don't appear there.
 
-- **DL5 — Catch-ups copy the instance's deadline.** The materialize step-1 mint copies from the
+- **DL5 — Catch-ups copy the instance's deadline.** ~~The materialize step-1 mint copies from the
   instance the user actually saw (ROUTINES §RV7 / ESTIMATES §3.5's "subtle" copy site), and
-  `deadline` joins that copy list. Dropping it would silently lose a hard date the user set.
+  `deadline` joins that copy list. Dropping it would silently lose a hard date the user set.~~
+  **Moot since ROUTINES §RV10 (2026-08-02): no catch-up is minted at all, so there is no copy to
+  get wrong.** A deadline set on an instance now lives and dies with that instance.
 
 - **DL6 — Warn, don't validate.** No constraint forces planned ≤ deadline. Badges carry the
   signal instead: **red** when `deadline <= today` (the hard date has arrived/passed), **amber**
@@ -68,7 +70,8 @@ Schema: `deadline DateTime? @db.Date` on `Task` (migration `add_task_deadline`).
 `src/app/actions/tasks.ts`, the optimistic literals in `src/hooks/use-tasks.ts`, quick-add's
 Deadline chip (`Target` icon, same anatomy as the Date chip), the edit dialog (beside Due date),
 badges in `task-row.tsx` and the board's `TaskCard`, the Today view's `urgentDate()`, the chat
-tools + system prompt, and the catch-up mint in `src/lib/data/routines.ts`.
+tools + system prompt. (It also threaded through the catch-up mint in `src/lib/data/routines.ts`,
+until ROUTINES §RV10 removed that mint.)
 
 ## 3. Deferred
 

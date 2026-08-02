@@ -108,7 +108,8 @@ priority, and project — tasks entered in a burst tend to be the same rough siz
 `· 2 unestimated` when some have none. Each Upcoming column header shows its own total.
 
 **Routines.** The routine dialog gets the same chip. Instances inherit the template's estimate at
-spawn, backfill, catch-up, and complete-ahead. Editing a template does not touch existing instances.
+spawn, backfill, complete-ahead, and click-to-materialize (ROUTINES §RV10). Editing a template does
+not touch existing instances.
 
 ### Acceptance
 
@@ -168,13 +169,14 @@ must carry `estimate`:
 | Site | Copies from |
 |---|---|
 | `setRoutineDay` — mint a corrected past day | template |
-| `completeOccurrence` — complete a future occurrence | template |
+| `completeOccurrence` / `materializeOccurrence` — act on a future occurrence | template |
 | `materializeRoutines` step 2 — backfill unseen days | template |
 | `materializeRoutines` step 3 — spawn today | template |
-| `materializeRoutines` step 1 — mint a catch-up task | **the instance**, not the template |
+| ~~`materializeRoutines` step 1 — mint a catch-up task~~ | ~~**the instance**, not the template~~ |
 
-The last one is the subtle one: catch-ups deliberately copy the instance the user actually saw
-(§RV7), so `estimate` must be added to the `stale` query's select, not just the template's.
+The last one was the subtle one — catch-ups copied the instance the user actually saw, so
+`estimate` had to be in the `stale` query's select. ROUTINES §RV10 removed the mint entirely
+(2026-08-02), leaving four sites that all copy the template.
 
 ### 3.6 Agent tools
 
