@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useTimezone } from "@/components/timezone-context";
 import { todayStr } from "@/lib/date";
 import { formatDuration } from "@/lib/duration";
+import { META_CHIP, META_ROW, PROJECT_CHIP } from "@/lib/task-meta";
 import {
   useCompleteTask,
   useDeleteTask,
@@ -106,10 +107,10 @@ export function TaskRow({
         <Flag className={cn("size-3.5 shrink-0", PRIORITY_COLOR[task.priority])} />
       )}
 
-      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span
           className={cn(
-            "truncate text-sm",
+            "line-clamp-2 text-sm leading-snug wrap-break-word",
             isCompleted && "text-muted-foreground line-through",
           )}
         >
@@ -121,16 +122,21 @@ export function TaskRow({
           task.timeUsed !== null ||
           task.routineId ||
           (showProject && project && !project.isInbox)) && (
-          <div className="flex items-center gap-2 text-xs">
+          <div className={META_ROW}>
             {task.dueDate && (
-              <span className={overdue ? "text-red-500" : "text-muted-foreground"}>
+              <span
+                className={cn(
+                  META_CHIP,
+                  overdue ? "text-red-500" : "text-muted-foreground",
+                )}
+              >
                 {dueLabel(task.dueDate, today)}
               </span>
             )}
             {task.deadline && (
               <span
                 className={cn(
-                  "flex items-center gap-0.5",
+                  META_CHIP,
                   deadlineHit
                     ? "text-red-500"
                     : planPastDeadline
@@ -151,7 +157,7 @@ export function TaskRow({
                 side by side they'd read as one number (docs/ESTIMATES.md §2). */}
             {task.estimate !== null && (
               <span
-                className="text-muted-foreground flex items-center gap-0.5"
+                className={cn(META_CHIP, "text-muted-foreground")}
                 title="Estimated"
               >
                 <Clock className="size-3" />
@@ -160,7 +166,7 @@ export function TaskRow({
             )}
             {task.timeUsed !== null && (
               <span
-                className="text-muted-foreground flex items-center gap-0.5"
+                className={cn(META_CHIP, "text-muted-foreground")}
                 title="Time used"
               >
                 <Hourglass className="size-3" />
@@ -169,14 +175,14 @@ export function TaskRow({
             )}
             {task.routineId && (
               <span
-                className="text-muted-foreground flex items-center gap-0.5"
+                className={cn(META_CHIP, "text-muted-foreground")}
                 title="Daily routine"
               >
                 <Repeat className="size-3" />
               </span>
             )}
             {showProject && project && !project.isInbox && (
-              <span className="text-muted-foreground"># {project.name}</span>
+              <span className={PROJECT_CHIP}># {project.name}</span>
             )}
           </div>
         )}

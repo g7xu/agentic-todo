@@ -8,9 +8,18 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  /* Each stack is written out in full on purpose. `@theme inline` inlines the
+     value into the utility instead of emitting a `:root` variable, so
+     `--font-sans: var(--font-sans)` (what stood here) resolved to nothing and
+     every element fell back to the browser's default serif — the whole app
+     rendered in Times. For the same reason `--font-heading` can't be defined as
+     `var(--font-sans)`; it has to repeat the stack.
+     The CJK faces are load-bearing: Geist ships no CJK glyphs, so without them
+     the browser picks its own fallback for 周复盘-style titles, which is a serif. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
