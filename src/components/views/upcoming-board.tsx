@@ -51,6 +51,7 @@ import {
   useRoutines,
 } from "@/hooks/use-routines";
 import { occurrencesBetween } from "@/lib/repeat";
+import { META_CHIP, META_ROW, PROJECT_CHIP } from "@/lib/task-meta";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -186,10 +187,13 @@ function TaskCard({
       >
         {isCompleted && <Check className="size-3" strokeWidth={3} />}
       </button>
-      <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {/* Two lines, then clip. A card is a glance surface, but a one-line
+            truncation cuts most real titles mid-word ("Stanford Final
+            transcript C…"), which is worse than a taller card. */}
         <span
           className={cn(
-            "truncate",
+            "line-clamp-2 leading-snug wrap-break-word",
             isCompleted && "text-muted-foreground line-through",
           )}
         >
@@ -198,7 +202,7 @@ function TaskCard({
         {task.description && (
           <span
             className={cn(
-              "text-muted-foreground truncate text-xs",
+              "text-muted-foreground line-clamp-1 text-xs wrap-break-word",
               isCompleted && "line-through",
             )}
           >
@@ -210,14 +214,16 @@ function TaskCard({
         task.estimate !== null ||
         task.timeUsed !== null ||
         (project && !project.isInbox) ? (
-          <div className="flex items-center gap-2 text-xs">
+          <div className={META_ROW}>
             {showDue && task.dueDate && (
-              <span className="text-red-500">{shortDate(task.dueDate)}</span>
+              <span className={cn(META_CHIP, "text-red-500")}>
+                {shortDate(task.dueDate)}
+              </span>
             )}
             {task.deadline !== null && (
               <span
                 className={cn(
-                  "flex items-center gap-0.5",
+                  META_CHIP,
                   deadlineHit
                     ? "text-red-500"
                     : planPastDeadline
@@ -236,7 +242,7 @@ function TaskCard({
             )}
             {task.estimate !== null && (
               <span
-                className="text-muted-foreground flex items-center gap-0.5"
+                className={cn(META_CHIP, "text-muted-foreground")}
                 title="Estimated"
               >
                 <Clock className="size-3" />
@@ -245,7 +251,7 @@ function TaskCard({
             )}
             {task.timeUsed !== null && (
               <span
-                className="text-muted-foreground flex items-center gap-0.5"
+                className={cn(META_CHIP, "text-muted-foreground")}
                 title="Time used"
               >
                 <Hourglass className="size-3" />
@@ -253,7 +259,7 @@ function TaskCard({
               </span>
             )}
             {project && !project.isInbox && (
-              <span className="text-muted-foreground"># {project.name}</span>
+              <span className={PROJECT_CHIP}># {project.name}</span>
             )}
           </div>
         ) : null}
@@ -390,20 +396,20 @@ function GhostCard({
           complete.mutate({ routineId: routine.id, date });
         }}
       />
-      <div className="flex min-w-0 flex-col gap-0.5 overflow-hidden">
-        <span className="text-muted-foreground truncate">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-muted-foreground line-clamp-2 leading-snug wrap-break-word">
           {routine.content}
         </span>
-        <div className="text-muted-foreground/70 flex items-center gap-2 text-xs">
+        <div className={cn(META_ROW, "text-muted-foreground/70")}>
           <Repeat className="size-3 shrink-0" />
           {routine.estimate !== null && (
-            <span className="flex items-center gap-0.5" title="Estimated">
+            <span className={META_CHIP} title="Estimated">
               <Clock className="size-3" />
               {formatDuration(routine.estimate)}
             </span>
           )}
           {project && !project.isInbox && (
-            <span className="truncate"># {project.name}</span>
+            <span className={PROJECT_CHIP}># {project.name}</span>
           )}
         </div>
       </div>
@@ -440,14 +446,13 @@ function Column({
     ...ghosts,
   ];
   return (
-    <div className="flex max-h-full w-64 shrink-0 flex-col">
-      <div
-        className={cn(
-          "flex items-baseline justify-between gap-2 px-1 pb-2 text-sm font-medium",
-          isOverdue && "text-red-500",
-        )}
-      >
-        {label}
+    <div className="flex max-h-full w-72 shrink-0 flex-col">
+      {/* Label over total, not side by side: at this width the pair can't share
+          a line, and the wrapped total used to spill across the next column. */}
+      <div className="flex flex-col items-start gap-0.5 px-1 pb-2">
+        <span className={cn("text-sm font-medium", isOverdue && "text-red-500")}>
+          {label}
+        </span>
         <PlannedTotal
           items={planned}
           className="text-muted-foreground text-xs font-normal"
