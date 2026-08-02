@@ -12,7 +12,6 @@ import {
   MoreHorizontal,
   Plus,
   Repeat,
-  Settings,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,7 +38,8 @@ const NAV = [
   // completed" toggle.
   { href: "/activity", label: "Activity", icon: CheckCircle2 },
   { href: "/routines", label: "Routines", icon: Repeat },
-  { href: "/settings", label: "Settings", icon: Settings },
+  // Settings is deliberately absent: the user menu in the header is the single
+  // entry point to /settings.
 ];
 
 export function AppSidebar() {

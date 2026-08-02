@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { UserButton } from "@neondatabase/auth/react/ui";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Settings } from "lucide-react";
 import { TimezoneProvider } from "@/components/timezone-context";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -40,7 +40,22 @@ export function AppShell({
               <MessageSquare className="size-4" />
               Assistant
             </button>
-            <UserButton size="icon" />
+            {/* UserButton's built-in Settings item links to
+                `${account.basePath}/${accountViewPaths.SETTINGS}` — i.e.
+                /account/settings, a route this app never defined, so it 404'd.
+                Drop the default link and point one at our own /settings. */}
+            <UserButton
+              size="icon"
+              disableDefaultLinks
+              additionalLinks={[
+                {
+                  href: "/settings",
+                  icon: <Settings />,
+                  label: "Settings",
+                  signedIn: true,
+                },
+              ]}
+            />
           </div>
         </header>
         <div className="flex flex-1 overflow-hidden">
