@@ -76,8 +76,10 @@ export async function renameProject(
 }
 
 /**
- * Delete a non-Inbox project: reassign its tasks to the user's Inbox, then
- * delete — all-or-nothing in one transaction (TDD §3). Rejects deleting Inbox.
+ * Delete a non-Inbox project: reassign its tasks AND routines to the user's
+ * Inbox, then delete — all-or-nothing in one transaction (TDD §3). Routines
+ * must move too: their project FK is ON DELETE RESTRICT, so leaving one
+ * behind makes the delete fail outright. Rejects deleting Inbox.
  */
 export async function deleteProjectReassign(
   userId: string,
@@ -93,6 +95,10 @@ export async function deleteProjectReassign(
   const inboxId = await getInboxId(userId);
   await prisma.$transaction([
     prisma.task.updateMany({
+      where: { projectId: id, userId },
+      data: { projectId: inboxId },
+    }),
+    prisma.routine.updateMany({
       where: { projectId: id, userId },
       data: { projectId: inboxId },
     }),

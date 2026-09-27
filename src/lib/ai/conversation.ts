@@ -37,8 +37,13 @@ export async function loadMessages(userId: string): Promise<UIMessage[]> {
 }
 
 /**
- * Idempotent upsert of a UIMessage on the text `id` (TDD §6.1) — re-persisting
+ * Idempotent save of a UIMessage on the text `id` (TDD §6.1) — re-persisting
  * a message never duplicates a row.
+ *
+ * The id comes from the client, so the update is scoped to the caller's own
+ * row: an id that belongs to another user matches nothing here, and the
+ * fall-through create then fails on the primary key instead of overwriting
+ * their message.
  */
 export async function saveMessage(
   conversationId: string,
@@ -46,10 +51,14 @@ export async function saveMessage(
   message: UIMessage,
 ): Promise<void> {
   const content = message.parts as unknown as Prisma.InputJsonValue;
-  await prisma.message.upsert({
-    where: { id: message.id },
-    update: { content, role: message.role },
-    create: {
+  const updated = await prisma.message.updateMany({
+    where: { id: message.id, userId, conversationId },
+    data: { content, role: message.role },
+  });
+  if (updated.count > 0) return;
+
+  await prisma.message.create({
+    data: {
       id: message.id,
       conversationId,
       userId,

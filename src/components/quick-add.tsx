@@ -156,7 +156,7 @@ export function QuickAdd({
     return () => window.removeEventListener("keydown", onKey);
   }, [shortcut]);
 
-  function reset() {
+  function close() {
     setContent("");
     setDescription("");
     setDueDate(defaultDueDate);
@@ -164,15 +164,15 @@ export function QuickAdd({
     setPriority(4);
     setEstimate(null);
     setProjectId(defaultProjectId);
-  }
-
-  function close() {
-    reset();
     setExpanded(false);
   }
 
+  // The outside-press listener below is subscribed once per open, so it reads
+  // the current `close` through a ref rather than re-subscribing each render.
   const closeRef = useRef(close);
-  closeRef.current = close;
+  useEffect(() => {
+    closeRef.current = close;
+  });
 
   useEffect(() => {
     if (!(expanded && expandOverlay)) return;
