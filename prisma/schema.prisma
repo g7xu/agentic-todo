@@ -23,11 +23,9 @@ model Profile {
   tzCaptured Boolean  @default(false) @map("tz_captured")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  projects      Project[]
-  tasks         Task[]
-  routines      Routine[]
-  conversations Conversation[]
-  messages      Message[]
+  projects Project[]
+  tasks    Task[]
+  routines Routine[]
 
   @@map("profiles")
 }
@@ -66,11 +64,6 @@ model Task {
   deadline    DateTime? @db.Date
   status      String    @default("active") /// 'active' | 'completed' | 'missed'
   routineId   String?   @map("routine_id") @db.Uuid /// set when this task is a materialized routine instance
-  /// Set when this is a CATCH-UP task minted for a missed occurrence (docs/ROUTINES.md §RV7).
-  /// Deliberately a soft link: it records provenance for the one-outstanding-catch-up guard and
-  /// for stats, WITHOUT implying the date lock that `routineId` carries (RV1) — the whole point
-  /// is that this row can be rescheduled like any ordinary task. Never set alongside `routineId`.
-  fromRoutineId String? @map("from_routine_id") @db.Uuid
   /// Expected minutes, set when the task is created (docs/ESTIMATES.md). The
   /// counterpart to `timeUsed` below, which is what it actually took; keeping
   /// both is what makes "thought 30m, took 2h" answerable. Capped at 24h in the
@@ -84,8 +77,7 @@ model Task {
 
   user    Profile  @relation(fields: [userId], references: [id])
   project Project  @relation(fields: [projectId], references: [id])
-  routine     Routine? @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
-  fromRoutine Routine? @relation("RoutineCatchUps", fields: [fromRoutineId], references: [id], onDelete: SetNull)
+  routine Routine? @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
 
   // Idempotency guard for routine materialization: at most one instance per
   // routine per day. NULLs are distinct in Postgres, so ordinary tasks
@@ -93,79 +85,34 @@ model Task {
   @@unique([routineId, dueDate])
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
-  // Backs the one-outstanding-catch-up guard, which asks "does this routine
-  // already have an active catch-up?" on every materialize.
-  @@index([userId, fromRoutineId, status])
   @@map("tasks")
 }
 
 /// A recurring task template. Never shown in task lists; spawns `Task`
 /// instances on its cadence via `materializeRoutines` (docs/ROUTINES.md §4.1).
 model Routine {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  projectId   String    @map("project_id") @db.Uuid
-  content     String
-  description String?
-  priority    Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  projectId      String    @map("project_id") @db.Uuid
+  content        String
+  description    String?
+  priority       Int       @default(4) @db.SmallInt /// 1=p1 highest … 4=default
   /// Default expected minutes, COPIED into each spawned instance (docs/ESTIMATES.md DE4).
   /// Editing it leaves already-spawned instances alone, like every other template field.
-  estimate    Int?
-  repeatEvery Int       @default(1) @map("repeat_every") /// every N units; always 1 when unit is 'weekday'
-  repeatUnit  String    @default("day") @map("repeat_unit") /// 'day' | 'week' | 'weekday' | 'month' | 'year'
-  repeatWeekdays Int[]  @default([]) @map("repeat_weekdays") /// 0=Sun … 6=Sat; scheduled-based 'week' unit only, else empty
-  repeatBase  String    @default("scheduled") @map("repeat_base") /// 'scheduled' | 'completed'
-  startDate   DateTime  @default(dbgenerated("CURRENT_DATE")) @map("start_date") @db.Date /// grid anchor; app sets user-local creation day
-  endDate     DateTime? @map("end_date") @db.Date /// last day new instances spawn (inclusive); null = never
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  estimate       Int?
+  repeatEvery    Int       @default(1) @map("repeat_every") /// every N units; always 1 when unit is 'weekday'
+  repeatUnit     String    @default("day") @map("repeat_unit") /// 'day' | 'week' | 'weekday' | 'month' | 'year'
+  repeatWeekdays Int[]     @default([]) @map("repeat_weekdays") /// 0=Sun … 6=Sat; scheduled-based 'week' unit only, else empty
+  repeatBase     String    @default("scheduled") @map("repeat_base") /// 'scheduled' | 'completed'
+  startDate      DateTime  @default(dbgenerated("CURRENT_DATE")) @map("start_date") @db.Date /// grid anchor; app sets user-local creation day
+  endDate        DateTime? @map("end_date") @db.Date /// last day new instances spawn (inclusive); null = never
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user    Profile @relation(fields: [userId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
-  tasks    Task[] @relation("RoutineInstances")
-  catchUps Task[] @relation("RoutineCatchUps")
+  tasks   Task[]  @relation("RoutineInstances")
 
   @@index([userId, active])
   @@map("routines")
-}
-
-/// v1 single thread per user (one row, @@unique([userId])). `title` reserved for v2.
-model Conversation {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  title     String?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  user     Profile   @relation(fields: [userId], references: [id])
-  messages Message[]
-
-  @@unique([userId])
-  @@map("conversations")
-}
-
-/// Per-user, per-UTC-day model-request counter for the AI rate limit (TDD §7).
-model DailyUsage {
-  userId String @map("user_id") @db.Uuid
-  day    String /// 'YYYY-MM-DD' (UTC)
-  count  Int    @default(0)
-
-  @@id([userId, day])
-  @@map("daily_usage")
-}
-
-/// `id` is the AI SDK v7 UIMessage id (short alphanumeric string, NOT a uuid),
-/// stored verbatim so it is the upsert conflict target (TDD §3/§6.1).
-model Message {
-  id             String   @id
-  conversationId String   @map("conversation_id") @db.Uuid
-  userId         String   @map("user_id") @db.Uuid
-  role           String /// 'user' | 'assistant' | 'system'
-  content        Json /// full UIMessage parts array
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  conversation Conversation @relation(fields: [conversationId], references: [id])
-  user         Profile      @relation(fields: [userId], references: [id])
-
-  @@index([conversationId])
-  @@map("messages")
 }
