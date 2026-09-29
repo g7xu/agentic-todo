@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarClock,
-  CalendarDays,
   CheckCircle2,
   Hash,
   Inbox,
@@ -31,7 +30,6 @@ import {
 
 const NAV = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/today", label: "Today", icon: CalendarDays },
   { href: "/upcoming", label: "Upcoming", icon: CalendarClock },
   // Replaced the Completed page (docs/ROUTINES.md §RV8). Completed ordinary
   // tasks remain reachable per project via each project view's "Show
