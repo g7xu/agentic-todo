@@ -25,8 +25,15 @@ async function fetchTasks(): Promise<TaskDTO[]> {
   return data.tasks;
 }
 
+/** Refetches on window focus, unlike the app's other queries: this read is
+ * also what records routine days that passed while the tab sat in the
+ * background. */
 export function useTasks() {
-  return useQuery({ queryKey: TASKS_KEY, queryFn: fetchTasks });
+  return useQuery({
+    queryKey: TASKS_KEY,
+    queryFn: fetchTasks,
+    refetchOnWindowFocus: true,
+  });
 }
 
 type Ctx = { prev?: TaskDTO[] };
@@ -118,14 +125,18 @@ export function useUpdateTask() {
 
 export function useUncompleteTask() {
   const qc = useQueryClient();
-  return useMutation<TaskDTO, Error, string, Ctx>({
+  return useMutation<TaskDTO | null, Error, string, Ctx>({
     mutationFn: (id) => uncompleteTaskAction(id),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: TASKS_KEY });
+      // A routine day has no pending form to go back to: re-opening it drops
+      // the record and its card takes over again.
       const prev = patch(qc, (tasks) =>
-        tasks.map((t) =>
-          t.id === id ? { ...t, status: "active", completedAt: null } : t,
-        ),
+        tasks.flatMap((t) => {
+          if (t.id !== id) return [t];
+          if (t.routineId !== null) return [];
+          return [{ ...t, status: "active" as const, completedAt: null }];
+        }),
       );
       return { prev };
     },
