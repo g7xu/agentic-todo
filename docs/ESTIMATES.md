@@ -27,9 +27,10 @@ input that demands a strict `HH:MM` string. Typing `30`, `1.5h`, or `90m` all fa
   Durations cluster hard around a handful of values, so six presets cover most entries in one click;
   everything else is typed into a free-text field that accepts `30`, `30m`, `2h`, `1h30`, `1.5h`,
   and `1:30`. This is the shape [Todoist][td], Jira/Tempo, and the Vaadin/Telerik duration pickers
-  all converge on, and it is *already* the shape of the Date chip in `quick-add.tsx` — presets in a
-  `DropdownMenu` with a raw input below a separator and an `X` to clear. Reusing a pattern the app
-  already has beats introducing a second idiom for time.
+  all converge on, and it was the shape of the Date chip in `quick-add.tsx` when this was decided —
+  presets in a `DropdownMenu` with a raw input below a separator and an `X` to clear. Reusing a
+  pattern the app already has beats introducing a second idiom for time. (The date chips have since
+  become `DatePicker`: a popover with preset shortcuts above a month grid, same chip anatomy.)
 
 - **DE2 — No due *time* requirement (diverges from Todoist).** Todoist won't let you set a duration
   until the task has a clock time, because there a duration is a calendar block. This app's
@@ -148,8 +149,7 @@ Pure and dependency-free, so it is directly unit-testable if a test runner ever 
 ### 3.3 The control (`src/components/duration-picker.tsx`)
 
 One component, two shapes: a compact chip for the composer, and a full-width trigger for a form grid
-cell in the edit and routine dialogs. Two details are copied verbatim from the Date chip, because
-both are non-obvious and already solved there:
+cell in the edit and routine dialogs. Two details are non-obvious and shared with `DatePicker`:
 
 - the embedded input is wrapped in `onKeyDown={(e) => e.stopPropagation()}`, or `DropdownMenu`'s
   typeahead swallows the keystrokes;

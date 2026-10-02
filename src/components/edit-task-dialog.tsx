@@ -19,8 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, Hourglass } from "lucide-react";
+import { Check, Hourglass, Target } from "lucide-react";
 import { useCompleteTask, useUpdateTask } from "@/hooks/use-tasks";
+import {
+  DatePicker,
+  DEADLINE_PRESETS,
+  DUE_DATE_PRESETS,
+} from "@/components/date-picker";
 import { DurationPicker } from "@/components/duration-picker";
 import { insertNewlineAtCursor } from "@/lib/textarea";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
@@ -48,8 +53,8 @@ export function EditTaskDialog({
   const [content, setContent] = useState(task.content);
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState(String(task.priority));
-  const [dueDate, setDueDate] = useState(task.dueDate ?? "");
-  const [deadline, setDeadline] = useState(task.deadline ?? "");
+  const [dueDate, setDueDate] = useState(task.dueDate);
+  const [deadline, setDeadline] = useState(task.deadline);
   const [estimate, setEstimate] = useState(task.estimate);
   const [timeUsed, setTimeUsed] = useState(task.timeUsed);
   const [projectId, setProjectId] = useState(task.projectId);
@@ -65,10 +70,8 @@ export function EditTaskDialog({
         content: content.trim(),
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
-        ...(isRoutineDay
-          ? {}
-          : { dueDate: dueDate ? dueDate : null, projectId }),
-        deadline: deadline ? deadline : null,
+        ...(isRoutineDay ? {} : { dueDate, projectId }),
+        deadline,
         estimate,
         timeUsed,
       },
@@ -135,14 +138,16 @@ export function EditTaskDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="due">Due date</Label>
-              <Input
-                id="due"
-                type="date"
+              <Label>Due date</Label>
+              <DatePicker
                 value={dueDate}
+                onChange={setDueDate}
+                presets={DUE_DATE_PRESETS}
+                placeholder="Due date"
+                clearLabel="Clear due date"
+                fullWidth
                 disabled={isRoutineDay}
                 title={isRoutineDay ? "Routine — the date is fixed" : undefined}
-                onChange={(e) => setDueDate(e.target.value)}
               />
               {isRoutineDay && (
                 <p className="text-muted-foreground text-xs">
@@ -151,14 +156,18 @@ export function EditTaskDialog({
               )}
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="deadline">Deadline</Label>
+              <Label>Deadline</Label>
               {/* The hard date — editable on any task, routine days
                   included; only the planned date beside it is locked for those. */}
-              <Input
-                id="deadline"
-                type="date"
+              <DatePicker
                 value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
+                onChange={setDeadline}
+                presets={DEADLINE_PRESETS}
+                placeholder="Deadline"
+                icon={Target}
+                clearLabel="Clear deadline"
+                fullWidth
+                align="end"
               />
             </div>
           </div>

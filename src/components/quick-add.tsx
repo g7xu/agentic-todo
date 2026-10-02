@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  CalendarDays,
   ChevronDown,
   Flag,
   Hash,
@@ -19,12 +18,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  DatePicker,
+  DEADLINE_PRESETS,
+  DUE_DATE_PRESETS,
+} from "@/components/date-picker";
 import { DurationPicker } from "@/components/duration-picker";
-import { useTimezone } from "@/components/timezone-context";
-import { addDays, todayStr } from "@/lib/date";
+import { addDays } from "@/lib/date";
 import { useCreateTask } from "@/hooks/use-tasks";
 import { useProjects } from "@/hooks/use-projects";
 
@@ -34,16 +36,6 @@ const PRIORITIES = [
   { value: 3, label: "Priority 3", color: "text-blue-500" },
   { value: 4, label: "Priority 4", color: "text-muted-foreground" },
 ] as const;
-
-function dueLabel(date: string, today: string): string {
-  if (date === today) return "Today";
-  if (date === addDays(today, 1)) return "Tomorrow";
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 function dueColor(date: string, today: string): string {
   if (date === today) return "text-green-600";
@@ -79,8 +71,6 @@ export function QuickAdd({
   expandOverlay?: boolean;
 }) {
   const create = useCreateTask();
-  const tz = useTimezone();
-  const today = todayStr(tz);
   const { data: projects = [] } = useProjects();
 
   const [expanded, setExpanded] = useState(false);
@@ -254,7 +244,7 @@ export function QuickAdd({
 
   const card = (
     <div
-      className="bg-card rounded-lg border shadow-sm"
+      className="@container bg-card rounded-lg border shadow-sm"
       onKeyDown={(e) => {
         if (e.key === "Escape") close();
       }}
@@ -290,108 +280,28 @@ export function QuickAdd({
           }}
         />
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {/* Due date chip */}
-          <div className="flex h-8 items-center rounded-md border">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-full items-center gap-1.5 px-2 text-sm",
-                    dueDate ? dueColor(dueDate, today) : "text-muted-foreground",
-                  )}
-                >
-                  <CalendarDays className="size-4" />
-                  {dueDate ? dueLabel(dueDate, today) : "Date"}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onSelect={() => setDueDate(today)}>
-                  Today
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setDueDate(addDays(today, 1))}>
-                  Tomorrow
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setDueDate(addDays(today, 7))}>
-                  Next week
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <div
-                  className="px-2 py-1.5"
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <input
-                    type="date"
-                    className="bg-transparent text-sm outline-none"
-                    value={dueDate ?? ""}
-                    onChange={(e) => setDueDate(e.target.value || null)}
-                  />
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {dueDate && (
-              <button
-                type="button"
-                aria-label="Clear due date"
-                className="text-muted-foreground hover:text-foreground h-full border-l px-1.5"
-                onClick={() => setDueDate(null)}
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+        {/* In the board's 272px overlay card the four chips sit in an even
+            2×2 grid; in the wide composer they flow in one row. */}
+        <div className="mt-2 grid grid-cols-2 gap-1.5 @sm:flex @sm:flex-wrap @sm:items-center @sm:gap-2">
+          <DatePicker
+            value={dueDate}
+            onChange={setDueDate}
+            presets={DUE_DATE_PRESETS}
+            placeholder="Date"
+            clearLabel="Clear due date"
+            valueClassName={dueColor}
+          />
 
-          {/* Deadline chip — the HARD date, distinct from the planned date
-              (docs/DEADLINES.md). Same chip anatomy as Date: presets above a
-              raw input, keydown stopped so the menu typeahead doesn't eat it,
-              clear-X as a sibling outside the trigger. */}
-          <div className="flex h-8 items-center rounded-md border">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex h-full items-center gap-1.5 px-2 text-sm",
-                    deadline ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <Target className="size-4" />
-                  {deadline ? dueLabel(deadline, today) : "Deadline"}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onSelect={() => setDeadline(addDays(today, 1))}>
-                  Tomorrow
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setDeadline(addDays(today, 7))}>
-                  In a week
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <div
-                  className="px-2 py-1.5"
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <input
-                    type="date"
-                    className="bg-transparent text-sm outline-none"
-                    value={deadline ?? ""}
-                    onChange={(e) => setDeadline(e.target.value || null)}
-                  />
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {deadline && (
-              <button
-                type="button"
-                aria-label="Clear deadline"
-                className="text-muted-foreground hover:text-foreground h-full border-l px-1.5"
-                onClick={() => setDeadline(null)}
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+          {/* The HARD date, distinct from the planned date (docs/DEADLINES.md). */}
+          <DatePicker
+            value={deadline}
+            onChange={setDeadline}
+            presets={DEADLINE_PRESETS}
+            placeholder="Deadline"
+            icon={Target}
+            clearLabel="Clear deadline"
+            align="end"
+          />
 
           {/* Priority */}
           <DropdownMenu>
@@ -399,7 +309,7 @@ export function QuickAdd({
               <button
                 type="button"
                 className={cn(
-                  "flex h-8 items-center gap-1.5 rounded-md border px-2 text-sm",
+                  "flex h-8 w-full items-center gap-1.5 rounded-md border px-2 text-sm @sm:w-auto",
                   priority < 4 ? priorityMeta.color : "text-muted-foreground",
                 )}
               >
