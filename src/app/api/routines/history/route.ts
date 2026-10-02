@@ -8,9 +8,9 @@ import { listRoutineHistory } from "@/lib/data/routines";
 const MAX_DAYS = 371;
 
 /**
- * Recorded routine instances for the Activity grid (docs/ROUTINES.md §RV8).
+ * Recorded routine outcomes for the Activity grid (docs/ROUTINES.md §RV8).
  * The window ends at the user's local today and runs back `days` days.
- * Unlike GET /api/tasks this does NOT materialize — reading your history must
+ * Unlike GET /api/tasks this records nothing — reading your history must
  * never write to it.
  */
 export async function GET(req: Request) {
@@ -20,7 +20,8 @@ export async function GET(req: Request) {
       where: { id: user.id },
       select: { timezone: true },
     });
-    const to = todayStr(profile?.timezone ?? "UTC");
+    const tz = profile?.timezone ?? "UTC";
+    const to = todayStr(tz);
 
     const raw = Number(new URL(req.url).searchParams.get("days"));
     const days = Number.isFinite(raw)
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       from,
       to,
-      days: await listRoutineHistory(user.id, from, to),
+      days: await listRoutineHistory(user.id, from, to, tz),
     });
   } catch (e) {
     if (e instanceof UnauthenticatedError) {
