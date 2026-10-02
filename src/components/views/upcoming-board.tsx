@@ -71,20 +71,13 @@ const PRIORITY_CIRCLE: Record<number, string> = {
 };
 
 /**
- * The routine look. Teal is the hue the Activity grid uses for a routine day
- * done, so a routine reads as the same thing on both pages. Borders need the
- * `!` for the reason given on PRIORITY_CIRCLE.
- *
- * Three states share the hue and differ in weight: a day that is due TODAY is
- * solid and filled, a day still AHEAD is dashed and unfilled, and a day already
- * RECORDED keeps only the border.
+ * The routine look: the same card as an ordinary task, so colour stays free
+ * to mean priority. What marks a routine is the repeat icon in its meta row,
+ * and a day still AHEAD is drawn with a dashed, unfilled border. A day due
+ * TODAY looks exactly like a task that is due today.
  */
-const ROUTINE_TODAY =
-  "border-teal-600/50! bg-teal-500/10 dark:border-teal-400/50!";
-const ROUTINE_PREVIEW =
-  "border-dashed border-teal-600/35! bg-transparent dark:border-teal-400/35!";
-const ROUTINE_RECORDED = "border-teal-600/35! dark:border-teal-400/35!";
-const ROUTINE_INK = "text-teal-700 dark:text-teal-300";
+const ROUTINE_TODAY = "bg-card shadow-sm";
+const ROUTINE_PREVIEW = "border-dashed bg-transparent";
 
 type Items = Record<string, string[]>;
 
@@ -170,7 +163,6 @@ function TaskCard({
         "bg-card group flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm shadow-sm",
         dragging && "ring-primary/40 ring-2",
         isCompleted && "opacity-70",
-        isRoutine && ROUTINE_RECORDED,
       )}
       onPointerDown={(e) => {
         pressPos.current = { x: e.clientX, y: e.clientY };
@@ -233,7 +225,7 @@ function TaskCard({
         (project && !project.isInbox) ? (
           <div className={META_ROW}>
             {isRoutine && (
-              <span className={cn(META_CHIP, ROUTINE_INK)} title="Routine">
+              <span className={cn(META_CHIP, "text-muted-foreground")} title="Routine">
                 <Repeat className="size-3" />
               </span>
             )}
@@ -417,7 +409,7 @@ function RoutineCard({
         <div
           className={cn(
             META_ROW,
-            isToday ? ROUTINE_INK : "text-muted-foreground/70",
+            isToday ? "text-muted-foreground" : "text-muted-foreground/70",
           )}
         >
           {/* The cadence is user-shaped text ("Every 2 weeks on Mon, Wed ·
