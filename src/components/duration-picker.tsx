@@ -23,9 +23,9 @@ const PRESETS = [15, 30, 45, 60, 90, 120];
  * `1h30`, `1.5h`, `90m`, and `1:30` (docs/ESTIMATES.md §3.3).
  *
  * Replaces a strict "HH:MM" input where all but the last of those were rejected
- * with nothing but a red border. Structurally a copy of the due-date chip in
- * `quick-add.tsx` — presets in a `DropdownMenu`, a raw input below a separator,
- * and a clear button *outside* the trigger so clicking it doesn't reopen the menu.
+ * with nothing but a red border. Presets in a `DropdownMenu`, a raw input below
+ * a separator, and a clear button *outside* the trigger so clicking it doesn't
+ * reopen the menu — the same chip anatomy as `DatePicker`.
  *
  * Only ever emits a valid value or null: unparseable text can't be committed, so
  * callers never need their own validation state.
@@ -84,13 +84,15 @@ export function DurationPicker({
     <button
       type="button"
       className={cn(
-        "flex h-full items-center gap-1.5 text-sm",
-        fullWidth ? "flex-1 px-3 text-left" : "px-2",
+        "flex h-full min-w-0 flex-1 items-center text-left text-sm",
+        fullWidth ? "gap-1.5 px-3" : "gap-1 pl-2 pr-1",
         value === null && "text-muted-foreground",
       )}
     >
       <Icon className="size-4 shrink-0" />
-      {value === null ? placeholder : formatDuration(value)}
+      <span className="truncate">
+        {value === null ? placeholder : formatDuration(value)}
+      </span>
     </button>
   );
 
@@ -124,8 +126,7 @@ export function DurationPicker({
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          {/* stopPropagation or the menu's typeahead eats the keystrokes — the
-              same guard the date input needs in quick-add.tsx. */}
+          {/* stopPropagation or the menu's typeahead eats the keystrokes. */}
           <div className="px-2 py-1.5" onKeyDown={(e) => e.stopPropagation()}>
             <input
               value={draft}
@@ -159,10 +160,10 @@ export function DurationPicker({
         <button
           type="button"
           aria-label={clearLabel}
-          className="text-muted-foreground hover:text-foreground h-full border-l px-1.5"
+          className="text-muted-foreground hover:text-foreground h-full border-l px-1"
           onClick={() => onChange(null)}
         >
-          <X className="size-3.5" />
+          <X className="size-3" />
         </button>
       )}
     </div>

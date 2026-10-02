@@ -40,6 +40,22 @@ export function dbDateToStr(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
+/**
+ * 'YYYY-MM-DD' → a Date at local midnight of that calendar day, for widgets
+ * that read a Date through local getters. The runtime zone is only a carrier
+ * here, so this is not interchangeable with `toDbDate` (UTC midnight).
+ */
+export function strToLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Inverse of `strToLocalDate`: the local calendar day of `d` as 'YYYY-MM-DD'. */
+export function localDateToStr(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** Add `n` days to a 'YYYY-MM-DD' string, returning a 'YYYY-MM-DD' string. */
 export function addDays(dateStr: string, n: number): string {
   const d = new Date(`${dateStr}T00:00:00.000Z`);
