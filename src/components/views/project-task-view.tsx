@@ -18,11 +18,16 @@ export function ProjectTaskView({
   const { data: projects = [] } = useProjects();
   const [showCompleted, setShowCompleted] = useState(false);
 
-  const active = tasks
-    .filter((t) => t.status === "active" && t.projectId === projectId)
+  // Routine days are left out: a project list holds tasks, and a routine's
+  // days are shown on the Upcoming board and the Activity page.
+  const own = tasks.filter(
+    (t) => t.projectId === projectId && t.routineId === null,
+  );
+  const active = own
+    .filter((t) => t.status === "active")
     .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
-  const completed = tasks
-    .filter((t) => t.status === "completed" && t.projectId === projectId)
+  const completed = own
+    .filter((t) => t.status === "completed")
     .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
 
   return (

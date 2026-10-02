@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { dbDateToStr, toDbDate } from "@/lib/date";
+import { dbDateToStr, toDbDate, todayStr } from "@/lib/date";
 import type { TaskDTO } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 
@@ -47,8 +47,8 @@ function toDTO(t: TaskRow): TaskDTO {
     deadline: dbDateToStr(t.deadline),
     estimate: t.estimate,
     timeUsed: t.timeUsed,
-    // 'missed' must pass through — coercing it to 'active' would resurrect
-    // swept routine instances in Today/overdue (docs/ROUTINES.md §3.3).
+    // 'missed' must pass through — coercing it to 'active' would put a
+    // recorded miss back on the board as pending work.
     status:
       t.status === "completed" || t.status === "missed" ? t.status : "active",
     order: t.order,
@@ -60,12 +60,20 @@ function toDTO(t: TaskRow): TaskDTO {
 }
 
 /**
- * All active tasks plus recently-completed tasks (for the Completed view and
- * the per-view "show completed" toggle). Scoped to the user. 'missed' rows
- * (parked routine instances) are deliberately never returned.
+ * All active tasks plus recently-completed tasks (for the per-view "show
+ * completed" toggle). Scoped to the user. 'missed' rows are deliberately never
+ * returned.
+ *
+ * Every completed routine day dated `today` or later is included whatever its
+ * age. The board hides a routine card only when it can see the completion, and
+ * a day completed far ahead would otherwise fall out of the recent window and
+ * its card would come back unticked.
  */
-export async function listTasks(userId: string): Promise<TaskDTO[]> {
-  const [active, completed] = await Promise.all([
+export async function listTasks(
+  userId: string,
+  today: string,
+): Promise<TaskDTO[]> {
+  const [active, completed, completedAhead] = await Promise.all([
     prisma.task.findMany({
       where: { userId, status: "active" },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -77,8 +85,22 @@ export async function listTasks(userId: string): Promise<TaskDTO[]> {
       take: 200,
       select: SELECT,
     }),
+    prisma.task.findMany({
+      where: {
+        userId,
+        status: "completed",
+        routineId: { not: null },
+        dueDate: { gte: toDbDate(today) },
+      },
+      select: SELECT,
+    }),
   ]);
-  return [...active, ...completed].map(toDTO);
+  const seen = new Set(completed.map((t) => t.id));
+  return [
+    ...active,
+    ...completed,
+    ...completedAhead.filter((t) => !seen.has(t.id)),
+  ].map(toDTO);
 }
 
 export type CreateTaskInput = {
@@ -173,12 +195,23 @@ export async function updateTask(
 ): Promise<TaskDTO> {
   const existing = await prisma.task.findFirst({
     where: { id, userId },
-    select: { id: true, routineId: true, dueDate: true },
+    select: { id: true, routineId: true, dueDate: true, projectId: true },
   });
   if (!existing) throw new Error("Task not found");
 
   if (input.projectId && !(await userOwnsProject(userId, input.projectId))) {
     throw new Error("Project not found");
+  }
+
+  // A routine row records what happened to one routine on one day, so it stays
+  // in that routine's project and on that day. Writes that restate the stored
+  // value pass, since callers send the whole form back.
+  if (
+    existing.routineId &&
+    input.projectId !== undefined &&
+    input.projectId !== existing.projectId
+  ) {
+    throw new Error("Routine tasks can't change project");
   }
 
   const data: Record<string, unknown> = {};
@@ -195,8 +228,6 @@ export async function updateTask(
   if (input.projectId !== undefined) data.projectId = input.projectId;
   if (input.order !== undefined) data.order = input.order;
   if (input.dueDate !== undefined) {
-    // Routine instances keep their date — each one stands for a specific day
-    // (docs/ROUTINES.md §2). Same-date writes pass so board reorders work.
     if (existing.routineId && input.dueDate !== dbDateToStr(existing.dueDate)) {
       throw new Error("Routine tasks can't be rescheduled");
     }
@@ -207,16 +238,45 @@ export async function updateTask(
   return toDTO(t);
 }
 
+/**
+ * Returns null when re-opening removed the row, which only happens to a
+ * routine day.
+ *
+ * A routine has no stored pending work: its cards are computed from the
+ * cadence. Re-opening a completed routine day therefore can't set the row
+ * back to 'active' — the board would show the stored task AND the card for
+ * the same day. The row is removed when its day is still ahead, which brings
+ * the card back, and marked missed when its day has passed.
+ */
 export async function setTaskStatus(
   userId: string,
   id: string,
   status: "active" | "completed",
-): Promise<TaskDTO> {
+): Promise<TaskDTO | null> {
   const existing = await prisma.task.findFirst({
     where: { id, userId },
-    select: { id: true },
+    select: { id: true, routineId: true, dueDate: true },
   });
   if (!existing) throw new Error("Task not found");
+
+  if (status === "active" && existing.routineId) {
+    const profile = await prisma.profile.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    const today = todayStr(profile?.timezone ?? "UTC");
+    const day = dbDateToStr(existing.dueDate);
+    if (day === null || day >= today) {
+      await prisma.task.deleteMany({ where: { id, userId } });
+      return null;
+    }
+    const missed = await prisma.task.update({
+      where: { id },
+      data: { status: "missed", completedAt: null },
+      select: SELECT,
+    });
+    return toDTO(missed);
+  }
 
   const t = await prisma.task.update({
     where: { id },

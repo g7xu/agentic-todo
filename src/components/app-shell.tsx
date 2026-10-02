@@ -4,6 +4,14 @@ import { UserButton } from "@neondatabase/auth/react/ui";
 import { Settings } from "lucide-react";
 import { TimezoneProvider } from "@/components/timezone-context";
 import { AppSidebar } from "@/components/app-sidebar";
+import { useRefetchOnNewDay } from "@/hooks/use-today";
+
+/** Rendered inside `TimezoneProvider`, because the day it watches is the
+ * profile timezone's, which the shell itself sits above. */
+function DayRollover() {
+  useRefetchOnNewDay();
+  return null;
+}
 
 export function AppShell({
   timezone,
@@ -16,6 +24,7 @@ export function AppShell({
 }) {
   return (
     <TimezoneProvider tz={timezone}>
+      <DayRollover />
       {/* h-dvh pins the shell to the viewport so `overflow-y-auto` on <main>
           is the real scroll container — body is min-h-full and would otherwise
           grow with content, letting pages run past the viewport bottom. */}

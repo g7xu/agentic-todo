@@ -16,11 +16,10 @@ import {
   completeRoutineOccurrenceAction,
   createRoutineAction,
   deleteRoutineAction,
-  materializeRoutineOccurrenceAction,
   setRoutineDayAction,
   updateRoutineAction,
 } from "@/app/actions/routines";
-import { TASKS_KEY } from "@/hooks/use-tasks";
+import { TASKS_KEY, useUncompleteTask } from "@/hooks/use-tasks";
 
 export const ROUTINES_KEY = ["routines"] as const;
 
@@ -39,11 +38,15 @@ export type RoutineDay = {
   routineId: string;
   date: string;
   status: "completed" | "missed";
+  /** ISO timestamp; null on a missed day. */
+  completedAt: string | null;
+  /** Completed on a later day than the one it was due. */
+  madeUp: boolean;
 };
 
 export type RoutineHistory = { from: string; to: string; days: RoutineDay[] };
 
-/** Recorded routine instances for the Activity grid (docs/ROUTINES.md §RV8).
+/** Recorded routine outcomes for the Activity grid (docs/ROUTINES.md §RV8).
  * Keyed by window length so switching 12 weeks ↔ a year caches both. */
 export function useRoutineHistory(days: number) {
   return useQuery({
@@ -83,9 +86,8 @@ export type UpdateRoutineInput = {
   active?: boolean;
 };
 
-/** Routine mutations invalidate ['tasks'] too: the refetch runs
- * materialization, so a new/resumed routine's instance appears immediately
- * and a deleted routine's active instance disappears. */
+/** Routine mutations invalidate ['tasks'] too: a routine's recorded days are
+ * task rows, and pausing or rescheduling one can write new ones. */
 function useInvalidateBoth() {
   const qc = useQueryClient();
   return () => {
@@ -94,8 +96,7 @@ function useInvalidateBoth() {
   };
 }
 
-/** Routine writes are not optimistic, so a failure leaves no wrong state to roll
- * back — but it must still be visible. Without this the dialog closes on a
+/** A failed routine write must be visible. Without this a dialog closes on a
  * rejected write and the routine silently never exists. */
 function reportError(message: string) {
   return (e: unknown) => {
@@ -123,36 +124,60 @@ export function useUpdateRoutine() {
   });
 }
 
-/** Complete a projected future occurrence (an Upcoming ghost card). Not
- * optimistic: there is no row to patch until the server creates one, and the
- * ['tasks'] refetch is what turns the ghost into a real completed card. */
+/**
+ * The tick on a routine card. Optimistic: a stand-in completed row goes into
+ * the ['tasks'] cache at once, which is what hides the card, and the row the
+ * server recorded replaces it when the write lands.
+ */
 export function useCompleteRoutineOccurrence() {
-  const invalidate = useInvalidateBoth();
-  return useMutation({
-    mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
-      completeRoutineOccurrenceAction(routineId, date),
-    onError: reportError("Couldn’t complete that occurrence"),
-    onSettled: invalidate,
-  });
-}
-
-/** Turn an Upcoming ghost into a real, still-to-do task (§RV10). The created
- * task is written straight into the ['tasks'] cache so the card appears in
- * place of the ghost without waiting for the refetch, and returned to the
- * caller so it can open the editor on it. */
-export function useMaterializeRoutineOccurrence() {
   const qc = useQueryClient();
   const invalidate = useInvalidateBoth();
-  return useMutation({
-    mutationFn: ({ routineId, date }: { routineId: string; date: string }) =>
-      materializeRoutineOccurrenceAction(routineId, date),
-    onSuccess: (task) => {
-      qc.setQueryData<TaskDTO[]>(TASKS_KEY, (old = []) =>
-        // A lost race returns the row that already existed — don't double it.
-        old.some((t) => t.id === task.id) ? old : [...old, task],
-      );
+  const uncomplete = useUncompleteTask();
+  return useMutation<
+    TaskDTO,
+    Error,
+    { routine: RoutineDTO; date: string },
+    { prev?: TaskDTO[]; tempId: string }
+  >({
+    mutationFn: ({ routine, date }) =>
+      completeRoutineOccurrenceAction(routine.id, date),
+    onMutate: async ({ routine, date }) => {
+      await qc.cancelQueries({ queryKey: TASKS_KEY });
+      const now = new Date().toISOString();
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const standIn: TaskDTO = {
+        id: tempId,
+        content: routine.content,
+        description: routine.description,
+        priority: routine.priority,
+        dueDate: date,
+        deadline: null,
+        estimate: routine.estimate,
+        timeUsed: null,
+        status: "completed",
+        order: Number.MAX_SAFE_INTEGER,
+        projectId: routine.projectId,
+        routineId: routine.id,
+        completedAt: now,
+        createdAt: now,
+      };
+      const prev = qc.getQueryData<TaskDTO[]>(TASKS_KEY);
+      qc.setQueryData<TaskDTO[]>(TASKS_KEY, (old = []) => [...old, standIn]);
+      return { prev, tempId };
     },
-    onError: reportError("Couldn’t add that occurrence"),
+    onSuccess: (task, _vars, ctx) => {
+      qc.setQueryData<TaskDTO[]>(TASKS_KEY, (old = []) => [
+        ...old.filter((t) => t.id !== ctx.tempId && t.id !== task.id),
+        task,
+      ]);
+      toast("Routine done", {
+        action: { label: "Undo", onClick: () => uncomplete.mutate(task.id) },
+      });
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(TASKS_KEY, ctx.prev);
+      reportError("Couldn’t complete that routine")(e);
+    },
     onSettled: invalidate,
   });
 }
@@ -166,11 +191,14 @@ export function useSetRoutineDay() {
       routineId,
       date,
       status,
+      completedAt,
     }: {
       routineId: string;
       date: string;
       status: "completed" | "missed" | "clear";
-    }) => setRoutineDayAction(routineId, date, status),
+      /** Restores an earlier completion time instead of stamping the present. */
+      completedAt?: string;
+    }) => setRoutineDayAction(routineId, date, status, completedAt),
     onError: reportError("Couldn’t update that day"),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ROUTINES_KEY });

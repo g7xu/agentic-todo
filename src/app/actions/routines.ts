@@ -8,7 +8,6 @@ import {
   createRoutine,
   deleteRoutine,
   listRoutines,
-  materializeOccurrence,
   setRoutineDay,
   updateRoutine,
 } from "@/lib/data/routines";
@@ -91,29 +90,15 @@ export async function updateRoutineAction(
   return updateRoutine(user.id, z.string().uuid().parse(id), data);
 }
 
-/** Complete a projected future occurrence from the Upcoming board (§RV6). All
- * the real guarding lives in `completeOccurrence` — this only shapes input. */
+/** The tick on a routine card: today's, or a later day completed ahead of time
+ * (§RV6). All the real guarding lives in `completeOccurrence` — this only
+ * shapes input. */
 export async function completeRoutineOccurrenceAction(
-  routineId: string,
-  date: string,
-): Promise<void> {
-  const user = await requireUser();
-  await completeOccurrence(
-    user.id,
-    z.string().uuid().parse(routineId),
-    dateStr.parse(date),
-  );
-}
-
-/** Turn a projected future occurrence into a real, still-to-do task from the
- * Upcoming board (§RV10). All the real guarding lives in
- * `materializeOccurrence` — this only shapes input. */
-export async function materializeRoutineOccurrenceAction(
   routineId: string,
   date: string,
 ): Promise<TaskDTO> {
   const user = await requireUser();
-  return materializeOccurrence(
+  return completeOccurrence(
     user.id,
     z.string().uuid().parse(routineId),
     dateStr.parse(date),
@@ -126,6 +111,7 @@ export async function setRoutineDayAction(
   routineId: string,
   date: string,
   status: "completed" | "missed" | "clear",
+  completedAt?: string,
 ): Promise<void> {
   const user = await requireUser();
   await setRoutineDay(
@@ -133,6 +119,7 @@ export async function setRoutineDayAction(
     z.string().uuid().parse(routineId),
     dateStr.parse(date),
     z.enum(["completed", "missed", "clear"]).parse(status),
+    z.string().datetime().optional().parse(completedAt),
   );
 }
 
