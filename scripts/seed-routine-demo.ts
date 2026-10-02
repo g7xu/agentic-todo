@@ -8,10 +8,9 @@
  * clean pass deletes that project's tasks and routines and nothing else. Your
  * real data is never read or written.
  *
- * Occurrences come from `occurrencesBetween`, the same function the spawner and
- * the Activity grid use, so the seeded history cannot disagree with what the
- * app believes the cadence to be. A seeded 'missed' row keeps its own date, as
- * a real one would (§RV7).
+ * Occurrences come from `occurrencesBetween`, the same function the server
+ * and the Activity grid use, so the seeded history cannot disagree with what
+ * the app believes the cadence to be.
  */
 import { readFileSync } from "node:fs";
 import { PrismaNeon } from "@prisma/adapter-neon";
@@ -256,12 +255,9 @@ async function seedAll(userId: string, tz: string) {
         (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${d}T00:00:00Z`)) /
           86_400_000,
       );
-      // Today's occurrence stays live work, not history — that is what the
-      // user sees in Today.
-      if (ago === 0) {
-        data.push({ status: "active", completedAt: null, dueDate: d });
-        continue;
-      }
+      // Today has no row until it is ticked: its card is computed from the
+      // cadence.
+      if (ago === 0) continue;
       const o = s.outcome(ago);
       if (o === "skip") continue;
       data.push({
