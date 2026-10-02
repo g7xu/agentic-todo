@@ -1,7 +1,8 @@
 /**
  * Routine cadence rules (docs/ROUTINES.md §4.2) — pure calendar math over
- * 'YYYY-MM-DD' strings, shared by the materialization engine (server) and the
- * routine dialog (client). No DB, no `Date.now()`: every function takes the
+ * 'YYYY-MM-DD' strings, shared by the server, which validates and records
+ * routine days, and the client, which draws them. No DB, no `Date.now()`: every
+ * function takes the
  * user-local days it needs, so behavior is timezone-correct by construction.
  */
 
@@ -104,12 +105,12 @@ export function normalizeRepeat<T extends Partial<RepeatSpec>>(
 /**
  * Does `today` (user-local) fall on this routine's cadence?
  *
- * `lastCompletionDay` is the user-local day of the newest completed instance,
- * or null if it has never been completed — only read for completed-based
- * routines, where the cadence measures forward from that day rather than from
- * the `startDate` grid. A completed-based routine with no completion yet is
- * due from `startDate` onward (its first occurrence), which is also why an
- * unfinished instance carrying forward is not a bug: it *is* that occurrence.
+ * `lastCompletionDay` is the user-local day of the newest completion, or null
+ * if it has never been completed — only read for completed-based routines,
+ * where the cadence measures forward from that day rather than from the
+ * `startDate` grid. A completed-based routine stays due on every day from the
+ * moment it falls due until it is ticked: with no fixed grid there is no
+ * single day to miss.
  *
  * `endDate` is inclusive and stops new occurrences only (docs/ROUTINES.md §4.1).
  */
@@ -166,11 +167,10 @@ export function isDueOn(
 }
 
 /**
- * Every day in `[from, to]` (inclusive) this routine is due on — used by the
- * Upcoming board to preview a week of routines without materializing them
- * (docs/ROUTINES.md §RV5). Instances stay today-only in the DB; these are
- * projections, so they cost nothing and correct themselves the moment the
- * template is edited.
+ * Every day in `[from, to]` (inclusive) this routine is due on. The Upcoming
+ * board draws its routine cards from this, and the server finds unrecorded
+ * past days with it. Nothing is stored for a day until it has an outcome, so
+ * the result corrects itself the moment the template is edited.
  *
  * Completed-based routines return `[]`: their cadence measures forward from
  * the last completion, so any date past the current occurrence is a guess that
