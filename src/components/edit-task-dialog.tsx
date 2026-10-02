@@ -54,9 +54,9 @@ export function EditTaskDialog({
   const [timeUsed, setTimeUsed] = useState(task.timeUsed);
   const [projectId, setProjectId] = useState(task.projectId);
 
-  // Routine instances keep their date — each one stands for a specific day
-  // (the server rejects reschedules; the field below is read-only for them).
-  const isRoutineInstance = task.routineId !== null;
+  // A routine row records one routine on one day, so its date and project are
+  // fixed. The server rejects a change to either; both fields are read-only.
+  const isRoutineDay = task.routineId !== null;
 
   function edits() {
     return {
@@ -65,11 +65,12 @@ export function EditTaskDialog({
         content: content.trim(),
         description: description.trim() ? description.trim() : null,
         priority: Number(priority),
-        ...(isRoutineInstance ? {} : { dueDate: dueDate ? dueDate : null }),
+        ...(isRoutineDay
+          ? {}
+          : { dueDate: dueDate ? dueDate : null, projectId }),
         deadline: deadline ? deadline : null,
         estimate,
         timeUsed,
-        projectId,
       },
     };
   }
@@ -139,23 +140,19 @@ export function EditTaskDialog({
                 id="due"
                 type="date"
                 value={dueDate}
-                disabled={isRoutineInstance}
-                title={
-                  isRoutineInstance
-                    ? "Daily routine — the date is fixed"
-                    : undefined
-                }
+                disabled={isRoutineDay}
+                title={isRoutineDay ? "Routine — the date is fixed" : undefined}
                 onChange={(e) => setDueDate(e.target.value)}
               />
-              {isRoutineInstance && (
+              {isRoutineDay && (
                 <p className="text-muted-foreground text-xs">
-                  Daily routine — the date is fixed.
+                  Routine — the date and project are fixed.
                 </p>
               )}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="deadline">Deadline</Label>
-              {/* The hard date — editable on any task, routine instances
+              {/* The hard date — editable on any task, routine days
                   included; only the planned date beside it is locked for those. */}
               <Input
                 id="deadline"
@@ -191,7 +188,11 @@ export function EditTaskDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Project</Label>
-              <Select value={projectId} onValueChange={setProjectId}>
+              <Select
+                value={projectId}
+                onValueChange={setProjectId}
+                disabled={isRoutineDay}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

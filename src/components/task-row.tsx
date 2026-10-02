@@ -176,7 +176,7 @@ export function TaskRow({
             {task.routineId && (
               <span
                 className={cn(META_CHIP, "text-muted-foreground")}
-                title="Daily routine"
+                title="Routine"
               >
                 <Repeat className="size-3" />
               </span>

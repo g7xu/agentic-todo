@@ -66,10 +66,20 @@ export async function updateTaskAction(
 
 export async function completeTaskAction(id: string): Promise<TaskDTO> {
   const user = await requireUser();
-  return setTaskStatus(user.id, z.string().uuid().parse(id), "completed");
+  const task = await setTaskStatus(
+    user.id,
+    z.string().uuid().parse(id),
+    "completed",
+  );
+  // Only re-opening can remove a row; completing always returns one.
+  if (!task) throw new Error("Task not found");
+  return task;
 }
 
-export async function uncompleteTaskAction(id: string): Promise<TaskDTO> {
+/** Resolves to null when the task was a routine day and re-opening removed it. */
+export async function uncompleteTaskAction(
+  id: string,
+): Promise<TaskDTO | null> {
   const user = await requireUser();
   return setTaskStatus(user.id, z.string().uuid().parse(id), "active");
 }

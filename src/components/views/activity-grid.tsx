@@ -2,26 +2,28 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { useTimezone } from "@/components/timezone-context";
-import { addDays, todayStr, weekdayOf } from "@/lib/date";
+import { addDays, weekdayOf } from "@/lib/date";
 import { cadenceLabel, occurrencesBetween } from "@/lib/repeat";
 import { toast } from "sonner";
 import {
   useRoutineHistory,
   useRoutines,
   useSetRoutineDay,
+  type RoutineDay,
 } from "@/hooks/use-routines";
+import { useToday } from "@/hooks/use-today";
 import { Button } from "@/components/ui/button";
 
 /**
  * What one routine did on one day (docs/ROUTINES.md §RV8).
  *
  * 'norecord' is the state that keeps this grid honest: the day was on the
- * cadence, but nothing was ever written for it, because materialization only
- * runs when the app is opened (§DR2). It is NOT a miss and must not be drawn
- * as one — an unopened week would otherwise read as a week of failure.
+ * cadence, but nothing was ever written for it, because a passed day is only
+ * recorded when the app is opened, and only so far back. It is NOT a miss and
+ * must not be drawn as one — an unopened week would otherwise read as a week
+ * of failure.
  */
-type Cell = "done" | "missed" | "norecord" | "notdue";
+type Cell = "done" | "madeup" | "missed" | "norecord" | "notdue";
 
 const WINDOWS = [
   { days: 84, label: "12 weeks" },
@@ -41,6 +43,9 @@ const WEEKDAY_COL = 16; // left gutter holding the M/W/F labels
 
 const CELL_CLASS: Record<Cell, string> = {
   done: "bg-teal-600 dark:bg-teal-500",
+  // Amber, not a lighter teal: the summary calendar already uses teal's
+  // lighter steps to mean "some of the day's routines done".
+  madeup: "bg-amber-400 dark:bg-amber-500/80",
   missed: "bg-red-400/80 dark:bg-red-500/70",
   // Outlined, not filled — reads as "nothing here", vs notdue's "nothing due".
   norecord: "bg-transparent ring-1 ring-inset ring-muted-foreground/35",
@@ -49,6 +54,7 @@ const CELL_CLASS: Record<Cell, string> = {
 
 const CELL_LABEL: Record<Cell, string> = {
   done: "done",
+  madeup: "made up late",
   missed: "missed",
   norecord: "no record",
   notdue: "not due",
@@ -75,6 +81,7 @@ const NEXT_STATUS: Partial<Record<Cell, "completed" | "missed">> = {
   missed: "completed",
   norecord: "completed",
   done: "missed",
+  madeup: "missed",
 };
 
 /** Restoring a cell to what it was. Note 'done' maps to the API's
@@ -82,6 +89,7 @@ const NEXT_STATUS: Partial<Record<Cell, "completed" | "missed">> = {
  * to having none, rather than being left as a 'missed' we invented. */
 const UNDO_STATUS: Partial<Record<Cell, "completed" | "missed" | "clear">> = {
   done: "completed",
+  madeup: "completed",
   missed: "missed",
   norecord: "clear",
 };
@@ -178,31 +186,9 @@ function CalendarGrid({
 }
 
 export function ActivityGrid() {
-  const tz = useTimezone();
-  const today = todayStr(tz);
+  const today = useToday();
   const [windowDays, setWindowDays] = useState(84);
   const setDay = useSetRoutineDay();
-
-  // Undo restores the cell to what it was. A cell that had no row at all goes
-  // back to having none — 'clear' — rather than being left as a fabricated
-  // 'missed', which would be a different claim than the one we started with.
-  function correct(routineId: string, date: string, from: Cell, name: string) {
-    const to = NEXT_STATUS[from];
-    const back = UNDO_STATUS[from];
-    if (!to || !back) return;
-    setDay.mutate(
-      { routineId, date, status: to },
-      {
-        onSuccess: () =>
-          toast(`${name} · ${dayLabel(date)} marked ${to}`, {
-            action: {
-              label: "Undo",
-              onClick: () => setDay.mutate({ routineId, date, status: back }),
-            },
-          }),
-      },
-    );
-  }
 
   const { data: routines = [], isLoading: loadingRoutines } = useRoutines();
   const { data: history, isLoading: loadingHistory } =
@@ -225,12 +211,47 @@ export function ActivityGrid() {
   // a year gives one. Padding (24) + border (2) + gutter (16) + its gap (4).
   const cardWidth = gridWidth + WEEKDAY_COL + 4 + 26;
 
-  // routineId|date -> recorded status. Everything else is derived.
+  // routineId|date -> what was recorded. Everything else is derived.
   const recorded = useMemo(() => {
-    const m = new Map<string, "completed" | "missed">();
-    for (const d of history?.days ?? []) m.set(`${d.routineId}|${d.date}`, d.status);
+    const m = new Map<string, RoutineDay>();
+    for (const d of history?.days ?? []) m.set(`${d.routineId}|${d.date}`, d);
     return m;
   }, [history]);
+
+  // Undo restores the cell to what it was. A cell that had no row at all goes
+  // back to having none — 'clear' — rather than being left as a fabricated
+  // 'missed', which would be a different claim than the one we started with.
+  //
+  // Undoing back to a completion hands the original completion time back too.
+  // Re-completing at the present moment would turn a day done on time into one
+  // made up late.
+  function correct(routineId: string, date: string, from: Cell, name: string) {
+    const to = NEXT_STATUS[from];
+    const back = UNDO_STATUS[from];
+    if (!to || !back) return;
+    const original = recorded.get(`${routineId}|${date}`)?.completedAt;
+    // Completing a day that has already passed is a makeup by definition.
+    const outcome = to === "completed" && date < today ? "made up" : to;
+    setDay.mutate(
+      { routineId, date, status: to },
+      {
+        onSuccess: () =>
+          toast(`${name} · ${dayLabel(date)} marked ${outcome}`, {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                setDay.mutate({
+                  routineId,
+                  date,
+                  status: back,
+                  completedAt:
+                    back === "completed" ? (original ?? undefined) : undefined,
+                }),
+            },
+          }),
+      },
+    );
+  }
 
   const rows = useMemo(() => {
     return routines.map((r) => {
@@ -245,29 +266,34 @@ export function ActivityGrid() {
 
       const cells: Cell[] = dates.map((d) => {
         const rec = recorded.get(`${r.id}|${d}`);
-        if (rec === "completed") return "done";
-        if (rec === "missed") return "missed";
+        if (rec?.status === "completed") return rec.madeUp ? "madeup" : "done";
+        if (rec?.status === "missed") return "missed";
         if (!dueSet.has(d)) return "notdue";
-        // Due, nothing written. Today's instance is still open, not a gap.
+        // Due, nothing written. Today is still open, not a gap.
         return d === today ? "notdue" : "norecord";
       });
 
+      // A made-up day is work that got done, so it counts toward the share.
       let done = 0;
+      let madeUp = 0;
       let counted = 0;
       for (const c of cells) {
-        if (c === "done" || c === "missed") counted++;
-        if (c === "done") done++;
+        if (c === "done" || c === "madeup" || c === "missed") counted++;
+        if (c === "done" || c === "madeup") done++;
+        if (c === "madeup") madeUp++;
       }
 
       // Streak walks back from today and stops at a miss — and at a
-      // 'norecord' too, because an unknown day can't be claimed as a win.
+      // 'norecord' too, because an unknown day can't be claimed as a win. A
+      // made-up day stops it as well: a streak is about showing up on the day,
+      // and that day was skipped.
       let streak = 0;
       for (let i = cells.length - 1; i >= 0; i--) {
         if (cells[i] === "done") streak++;
-        else if (cells[i] === "missed" || cells[i] === "norecord") break;
+        else if (cells[i] !== "notdue") break;
       }
 
-      return { routine: r, cells, done, counted, streak, openEnded };
+      return { routine: r, cells, done, madeUp, counted, streak, openEnded };
     });
   }, [routines, dates, recorded, today]);
 
@@ -279,8 +305,8 @@ export function ActivityGrid() {
       let gap = 0;
       for (const row of rows) {
         const c = row.cells[i];
-        if (c === "done" || c === "missed") due++;
-        if (c === "done") done++;
+        if (c === "done" || c === "madeup" || c === "missed") due++;
+        if (c === "done" || c === "madeup") done++;
         if (c === "norecord") gap++;
       }
       return { due, done, gap };
@@ -365,7 +391,8 @@ export function ActivityGrid() {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-3">
-          {rows.map(({ routine, cells, done, counted, streak, openEnded }) => (
+          {rows.map(
+            ({ routine, cells, done, madeUp, counted, streak, openEnded }) => (
             <div
               key={routine.id}
               className="rounded-lg border p-3"
@@ -379,7 +406,7 @@ export function ActivityGrid() {
                     paused had no equivalent. */}
                 {!routine.active && (
                   <span
-                    title="Paused — no new instances spawn, and days after pausing are not recorded"
+                    title="Paused — no cards appear, and days after pausing are not recorded"
                     className="border-muted-foreground/30 text-muted-foreground shrink-0 rounded border px-1 font-mono text-[10px] tracking-wide uppercase"
                   >
                     paused
@@ -399,7 +426,9 @@ export function ActivityGrid() {
                   title={
                     openEnded
                       ? `${done} completions recorded`
-                      : `${done} of ${counted} recorded days done · ${streak} in a row`
+                      : `${done} of ${counted} recorded days done` +
+                        (madeUp > 0 ? ` (${madeUp} made up late)` : "") +
+                        ` · ${streak} in a row`
                   }
                 >
                   {openEnded
@@ -443,17 +472,20 @@ export function ActivityGrid() {
                 }}
               />
             </div>
-          ))}
+            ),
+          )}
         </div>
       </div>
 
       <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
-        {(["done", "missed", "norecord", "notdue"] as Cell[]).map((c) => (
-          <span key={c} className="flex items-center gap-1.5">
-            <span className={cn("size-3 rounded-[2.5px]", CELL_CLASS[c])} />
-            {CELL_LABEL[c] === "no record" ? "No record" : CELL_LABEL[c]}
-          </span>
-        ))}
+        {(["done", "madeup", "missed", "norecord", "notdue"] as Cell[]).map(
+          (c) => (
+            <span key={c} className="flex items-center gap-1.5">
+              <span className={cn("size-3 rounded-[2.5px]", CELL_CLASS[c])} />
+              {CELL_LABEL[c] === "no record" ? "No record" : CELL_LABEL[c]}
+            </span>
+          ),
+        )}
       </div>
 
       {rows.some((r) => r.cells.includes("norecord")) && (

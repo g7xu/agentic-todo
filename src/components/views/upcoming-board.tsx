@@ -32,8 +32,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTimezone } from "@/components/timezone-context";
-import { addDays, todayStr } from "@/lib/date";
+import { addDays } from "@/lib/date";
 import { formatDuration } from "@/lib/duration";
 import { PlannedTotal } from "@/components/planned-total";
 import { QuickAdd } from "@/components/quick-add";
@@ -45,12 +44,9 @@ import {
   useUncompleteTask,
 } from "@/hooks/use-tasks";
 import { useProjects } from "@/hooks/use-projects";
-import {
-  useCompleteRoutineOccurrence,
-  useMaterializeRoutineOccurrence,
-  useRoutines,
-} from "@/hooks/use-routines";
-import { occurrencesBetween } from "@/lib/repeat";
+import { useCompleteRoutineOccurrence, useRoutines } from "@/hooks/use-routines";
+import { useToday } from "@/hooks/use-today";
+import { cadenceLabel, isDueOn, occurrencesBetween } from "@/lib/repeat";
 import { META_CHIP, META_ROW, PROJECT_CHIP } from "@/lib/task-meta";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,7 +70,26 @@ const PRIORITY_CIRCLE: Record<number, string> = {
   4: "border-muted-foreground/50! text-muted-foreground",
 };
 
+/**
+ * The routine look. Teal is the hue the Activity grid uses for a routine day
+ * done, so a routine reads as the same thing on both pages. Borders need the
+ * `!` for the reason given on PRIORITY_CIRCLE.
+ *
+ * Three states share the hue and differ in weight: a day that is due TODAY is
+ * solid and filled, a day still AHEAD is dashed and unfilled, and a day already
+ * RECORDED keeps only the border.
+ */
+const ROUTINE_TODAY =
+  "border-teal-600/50! bg-teal-500/10 dark:border-teal-400/50!";
+const ROUTINE_PREVIEW =
+  "border-dashed border-teal-600/35! bg-transparent dark:border-teal-400/35!";
+const ROUTINE_RECORDED = "border-teal-600/35! dark:border-teal-400/35!";
+const ROUTINE_INK = "text-teal-700 dark:text-teal-300";
+
 type Items = Record<string, string[]>;
+
+/** One routine occurrence to draw in a day column. */
+type RoutineCardItem = { routine: RoutineDTO; variant: "today" | "preview" };
 
 /** Pseudo-column key for active tasks whose due date has passed. */
 const OVERDUE = "overdue";
@@ -128,12 +143,12 @@ function TaskCard({
   const uncomplete = useUncompleteTask();
   const del = useDeleteTask();
   const [editing, setEditing] = useState(false);
-  const tz = useTimezone();
-  const today = todayStr(tz);
+  const today = useToday();
 
   const project = projects.find((p) => p.id === task.projectId);
   const isTemp = task.id.startsWith("temp-");
   const isCompleted = task.status === "completed";
+  const isRoutine = task.routineId !== null;
   // Deadline states, mirrored from task-row: red = hard date arrived/passed;
   // amber = planned date lands after the deadline.
   const deadlineHit =
@@ -155,6 +170,7 @@ function TaskCard({
         "bg-card group flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm shadow-sm",
         dragging && "ring-primary/40 ring-2",
         isCompleted && "opacity-70",
+        isRoutine && ROUTINE_RECORDED,
       )}
       onPointerDown={(e) => {
         pressPos.current = { x: e.clientX, y: e.clientY };
@@ -210,11 +226,17 @@ function TaskCard({
           </span>
         )}
         {(showDue && task.dueDate) ||
+        isRoutine ||
         task.deadline !== null ||
         task.estimate !== null ||
         task.timeUsed !== null ||
         (project && !project.isInbox) ? (
           <div className={META_ROW}>
+            {isRoutine && (
+              <span className={cn(META_CHIP, ROUTINE_INK)} title="Routine">
+                <Repeat className="size-3" />
+              </span>
+            )}
             {showDue && task.dueDate && (
               <span className={cn(META_CHIP, "text-red-500")}>
                 {shortDate(task.dueDate)}
@@ -310,9 +332,7 @@ function SortableTask({
   projects: ProjectDTO[];
   showDue?: boolean;
 }) {
-  // Routine instances keep their date, so they can't be dragged to another
-  // column (the server rejects the move anyway; docs/ROUTINES.md §2).
-  const dragDisabled = task.id.startsWith("temp-") || task.routineId !== null;
+  const dragDisabled = task.id.startsWith("temp-");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: dragDisabled });
   return (
@@ -344,64 +364,68 @@ function SortableTask({
 }
 
 /**
- * A routine occurrence that has not been materialized yet — a projection, not
- * a task (docs/ROUTINES.md §RV5). Dashed throughout to signal "no row behind
- * this yet". Two things can happen to it, and both create the real row on its
- * own date: ticking the circle completes it ahead of time (§RV6), and clicking
- * anywhere else materializes it as ordinary to-do work (§RV10), which is what
- * makes it editable — a projection has nothing to edit. The card is still not
- * draggable: once real, RV1 locks instance dates anyway.
+ * One routine occurrence, drawn from the cadence. No task row stands behind it
+ * until it is ticked, which is why there is nothing to open or edit, and why
+ * it sits outside the sortable list: it has no stored date to drag.
+ *
+ * Ticking records the occurrence as done on its own date. On a `preview` card
+ * that completes the day ahead of time (docs/ROUTINES.md §RV6).
  */
-function GhostCard({
+function RoutineCard({
   routine,
   date,
+  variant,
   projects,
-  onMaterialize,
-}: {
-  routine: RoutineDTO;
-  date: string;
-  projects: ProjectDTO[];
-  /** Called with the freshly created task so the board can open its editor. */
-  onMaterialize: (task: TaskDTO) => void;
-}) {
+}: RoutineCardItem & { date: string; projects: ProjectDTO[] }) {
   const complete = useCompleteRoutineOccurrence();
-  const materialize = useMaterializeRoutineOccurrence();
-  const busy = complete.isPending || materialize.isPending;
   const project = projects.find((p) => p.id === routine.projectId);
+  const isToday = variant === "today";
   return (
     <div
       className={cn(
-        "bg-card/40 hover:bg-accent/40 flex cursor-pointer items-start gap-2 rounded-md border border-dashed p-2 text-sm transition-colors",
-        busy && "pointer-events-none opacity-60",
+        "flex items-start gap-2 rounded-md border p-2 text-sm",
+        isToday ? ROUTINE_TODAY : ROUTINE_PREVIEW,
       )}
-      title="Not created yet — click to add it to this day"
-      onClick={() =>
-        materialize.mutate(
-          { routineId: routine.id, date },
-          { onSuccess: onMaterialize },
-        )
+      title={
+        isToday ? undefined : "Scheduled — tick to complete it ahead of time"
       }
     >
       <button
         type="button"
-        disabled={busy}
-        aria-label={`Complete "${routine.content}" ahead of time`}
-        title="Complete ahead of time"
+        disabled={complete.isPending}
+        aria-label={
+          isToday
+            ? `Complete "${routine.content}"`
+            : `Complete "${routine.content}" ahead of time`
+        }
         className={cn(
-          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-dashed disabled:opacity-40",
+          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 disabled:opacity-40",
+          !isToday && "border-dashed",
           PRIORITY_CIRCLE[routine.priority],
         )}
-        onClick={(e) => {
-          e.stopPropagation(); // ticking it off must not also materialize it
-          complete.mutate({ routineId: routine.id, date });
-        }}
+        onClick={() => complete.mutate({ routine, date })}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-muted-foreground line-clamp-2 leading-snug wrap-break-word">
+        <span
+          className={cn(
+            "line-clamp-2 leading-snug wrap-break-word",
+            !isToday && "text-muted-foreground",
+          )}
+        >
           {routine.content}
         </span>
-        <div className={cn(META_ROW, "text-muted-foreground/70")}>
-          <Repeat className="size-3 shrink-0" />
+        <div
+          className={cn(
+            META_ROW,
+            isToday ? ROUTINE_INK : "text-muted-foreground/70",
+          )}
+        >
+          {/* The cadence is user-shaped text ("Every 2 weeks on Mon, Wed ·
+              until Jul 20"), so unlike the other chips it may shrink and clip. */}
+          <span className="flex min-w-0 items-center gap-0.5">
+            <Repeat className="size-3 shrink-0" />
+            <span className="truncate">{cadenceLabel(routine)}</span>
+          </span>
           {routine.estimate !== null && (
             <span className={META_CHIP} title="Estimated">
               <Clock className="size-3" />
@@ -422,28 +446,26 @@ function Column({
   label,
   ids,
   completedIds,
-  ghosts,
+  routineCards,
   taskById,
   projects,
-  onMaterialize,
 }: {
   date: string;
   label: string;
   ids: string[];
   completedIds: string[];
-  ghosts: RoutineDTO[];
+  routineCards: RoutineCardItem[];
   taskById: Map<string, TaskDTO>;
   projects: ProjectDTO[];
-  onMaterialize: (task: TaskDTO) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const [showCompleted, setShowCompleted] = useState(false);
   const isOverdue = date === OVERDUE;
-  // Ghosts count: an unmaterialized occurrence is still work this day will ask
-  // for. Completed tasks don't — "planned" is about what's left.
+  // Routine cards count: an occurrence with no row is still work this day
+  // will ask for. Completed tasks don't — "planned" is about what's left.
   const planned = [
     ...ids.map((id) => taskById.get(id)).filter((t) => t !== undefined),
-    ...ghosts,
+    ...routineCards.map((c) => c.routine),
   ];
   return (
     <div className="flex max-h-full w-72 shrink-0 flex-col">
@@ -483,16 +505,15 @@ function Column({
               ) : null;
             })}
           </SortableContext>
-          {/* Routine previews sit under the real tasks — they aren't work you
-              can act on yet, just a heads-up that the day isn't as empty as it
-              looks. Outside SortableContext so drags ignore them entirely. */}
-          {ghosts.map((r) => (
-            <GhostCard
-              key={r.id}
-              routine={r}
+          {/* Routine cards sit under the tasks, outside SortableContext, so a
+              drag can neither move one nor drop between them. */}
+          {routineCards.map(({ routine, variant }) => (
+            <RoutineCard
+              key={routine.id}
+              routine={routine}
+              variant={variant}
               date={date}
               projects={projects}
-              onMaterialize={onMaterialize}
             />
           ))}
           {/* Completed tasks stay in their day column, crossed out at the
@@ -542,8 +563,7 @@ function Column({
 }
 
 export function UpcomingBoard() {
-  const tz = useTimezone();
-  const today = todayStr(tz);
+  const today = useToday();
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
   const { data: routines = [] } = useRoutines();
@@ -552,11 +572,6 @@ export function UpcomingBoard() {
   const [horizon, setHorizon] = useState(7);
   const [items, setItems] = useState<Items>({});
   const [activeId, setActiveId] = useState<string | null>(null);
-  // The editor for a just-materialized ghost (§RV10) lives HERE, not in the
-  // GhostCard: the moment the task exists the ghost stops being projected and
-  // unmounts, which would take a dialog rendered inside it down with it.
-  const [materialized, setMaterialized] = useState<TaskDTO | null>(null);
-
   const dates = useMemo(
     () => Array.from({ length: horizon }, (_, i) => addDays(today, i)),
     [today, horizon],
@@ -615,18 +630,15 @@ export function UpcomingBoard() {
     return cols;
   }, [tasks, dates]);
 
-  // Routine occurrences projected across the visible range. The server only
-  // ever materializes today's instance (docs/ROUTINES.md §DR2), so without
-  // this the future columns look empty even though the routine will fire.
-  // Suppressed on any date that already has a real instance — today's, and
-  // any unfinished one still sitting on its own date — so a routine is never
-  // shown twice.
-  const ghostsByDate = useMemo<Record<string, RoutineDTO[]>>(() => {
-    const cols: Record<string, RoutineDTO[]> = Object.fromEntries(
+  // Routine occurrences across the visible range, computed from each cadence.
+  // A day that already has a recorded row is left out, so a routine is never
+  // shown twice: its completed row is drawn in the column's completed list.
+  const routineCardsByDate = useMemo<Record<string, RoutineCardItem[]>>(() => {
+    const cols: Record<string, RoutineCardItem[]> = Object.fromEntries(
       dates.map((d) => [d, []]),
     );
     if (dates.length === 0) return cols;
-    const materialized = new Set(
+    const recorded = new Set(
       tasks
         .filter((t) => t.routineId !== null && t.dueDate !== null)
         .map((t) => `${t.routineId}|${t.dueDate}`),
@@ -634,12 +646,21 @@ export function UpcomingBoard() {
     const last = dates[dates.length - 1];
     for (const r of routines) {
       if (!r.active) continue;
-      for (const d of occurrencesBetween(r, dates[0], last)) {
-        if (!materialized.has(`${r.id}|${d}`)) cols[d].push(r);
+      // A completed-based cadence measures from its last completion, so today
+      // is its only knowable occurrence and `occurrencesBetween` yields none.
+      const days =
+        r.repeatBase === "completed"
+          ? isDueOn(r, today, r.lastCompletedOn)
+            ? [today]
+            : []
+          : occurrencesBetween(r, dates[0], last);
+      for (const d of days) {
+        if (recorded.has(`${r.id}|${d}`) || !(d in cols)) continue;
+        cols[d].push({ routine: r, variant: d === today ? "today" : "preview" });
       }
     }
     return cols;
-  }, [routines, tasks, dates]);
+  }, [routines, tasks, dates, today]);
 
   // When idle, render straight from the server cache; during a drag, render the
   // local `items` (seeded on drag start, mutated by onDragOver). This avoids a
@@ -766,10 +787,9 @@ export function UpcomingBoard() {
               label="Overdue"
               ids={view[OVERDUE] ?? []}
               completedIds={[]}
-              ghosts={[]}
+              routineCards={[]}
               taskById={taskById}
               projects={projects}
-              onMaterialize={setMaterialized}
             />
           )}
           {dates.map((date) => (
@@ -779,10 +799,9 @@ export function UpcomingBoard() {
               label={columnLabel(date, today)}
               ids={view[date] ?? []}
               completedIds={completedItems[date] ?? []}
-              ghosts={ghostsByDate[date] ?? []}
+              routineCards={routineCardsByDate[date] ?? []}
               taskById={taskById}
               projects={projects}
-              onMaterialize={setMaterialized}
             />
           ))}
           <div className="flex w-40 shrink-0 items-start pt-7">
@@ -800,18 +819,6 @@ export function UpcomingBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
-      {/* Outside the DndContext on purpose: a dialog rendered inside a column
-          bubbles its pointer events through the sortable above it. */}
-      {materialized && (
-        <EditTaskDialog
-          task={materialized}
-          projects={projects}
-          open
-          onOpenChange={(open) => {
-            if (!open) setMaterialized(null);
-          }}
-        />
-      )}
     </div>
   );
 }

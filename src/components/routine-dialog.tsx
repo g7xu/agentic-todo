@@ -41,7 +41,7 @@ const PRIORITIES = [
 ];
 
 /** Create (no `routine`) or edit (with `routine`) a daily routine template.
- * Edits affect future instances only — today's instance keeps its values. */
+ * Edits reach every day not yet recorded; recorded days keep their values. */
 export function RoutineDialog({
   routine,
   projects,
@@ -186,7 +186,7 @@ export function RoutineDialog({
               </Select>
             </div>
             <div className="grid gap-1.5">
-              {/* Copied into every instance this routine spawns, so recurring
+              {/* Copied into every day this routine records, so recurring
                   load counts toward day totals without re-estimating it daily
                   (docs/ESTIMATES.md DE4). */}
               <Label>Estimate</Label>
@@ -329,12 +329,13 @@ export function RoutineDialog({
           </div>
 
           <p className="text-muted-foreground text-xs">
-            An unfinished routine task carries over to the next day.
+            A day you don’t tick is recorded as missed. It does not move to
+            the next day.
           </p>
           {routine && (
             <p className="text-muted-foreground text-xs">
-              Changes apply to future days — today’s task keeps its current
-              values.
+              Changes apply to days not yet recorded. Days already done or
+              missed keep their values.
             </p>
           )}
         </div>
