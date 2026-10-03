@@ -185,11 +185,11 @@ approval pause. Consistent with the original stack decision (no LangGraph).
 
 ## 6. Open questions
 
-1. **MCP or in-app chat — which surface matters?** If the owner mostly talks to Claude, a local
-   stdio MCP server exposing the §5.1 capabilities delivers the stated want ("chat to know progress,
-   review history, edit, trigger workflows") without building any chat UI, and makes §4's *show*
-   stage largely unnecessary. Remote MCP would need OAuth 2.1; a local stdio server needs none. If
-   the app's own chat is the product, continue to *show* and *compose*. Not decided.
+1. **MCP or in-app chat — which surface matters?** **Decided 2026-10-02: remote MCP** (DECISIONS
+   D7, spec in [MCP.md](./MCP.md)). The in-app chat was removed; Claude reaches the §5.1
+   capabilities through `/api/mcp` behind an in-app OAuth 2.1 server. §4's *show* stage is no
+   longer needed — Claude's own UI renders tool output and its tool-approval prompt is AG3's one
+   tap. `getActivity` ships as the `get_routine_history` tool.
 2. **Model and API key.** `gemini-2.0-flash` was chosen for the free tier; `DAILY_REQUEST_CAP = 250`.
    The owner has offered to supply their own key, which unlocks per-task model routing — cheap model
    for chat, strong model for sharpening and the daily review. Also the moment to fix the drift where
