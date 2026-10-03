@@ -56,3 +56,15 @@ export type ProjectDTO = {
   isInbox: boolean;
   order: number;
 };
+
+/** An OAuth grant as shown under Settings → Connected apps (docs/MCP.md §2). */
+export type ConnectedAppDTO = {
+  id: string;
+  name: string;
+  /** Hostname of the client's metadata URL; null for dynamically registered clients. */
+  host: string | null;
+  kind: "cimd" | "dcr";
+  scopes: string[];
+  createdAt: string; // ISO
+  lastUsedAt: string | null; // ISO
+};

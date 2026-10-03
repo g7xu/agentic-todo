@@ -24,8 +24,14 @@ async function fetchProjects(): Promise<ProjectDTO[]> {
   return data.projects;
 }
 
+/** Refetched on every focus so a project created through MCP shows up when
+ * the user comes back to the tab, even inside the global staleTime. */
 export function useProjects() {
-  return useQuery({ queryKey: PROJECTS_KEY, queryFn: fetchProjects });
+  return useQuery({
+    queryKey: PROJECTS_KEY,
+    queryFn: fetchProjects,
+    refetchOnWindowFocus: "always",
+  });
 }
 
 /** Project writes are not optimistic, so a rejected write leaves the UI

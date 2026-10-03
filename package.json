@@ -14,7 +14,10 @@
     "db:studio": "prisma studio",
     "demo:seed": "tsx --tsconfig tsconfig.json scripts/seed-routine-demo.ts",
     "demo:clean": "tsx --tsconfig tsconfig.json scripts/seed-routine-demo.ts clean",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e:fixtures": "tsx --tsconfig tsconfig.json --env-file=.env.local tests/e2e/mcp-fixtures.ts",
+    "test:e2e:abuse": "tsx --tsconfig tsconfig.json tests/e2e/mcp-abuse.ts",
+    "test:e2e:smoke": "tsx --tsconfig tsconfig.json tests/e2e/oauth-smoke.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

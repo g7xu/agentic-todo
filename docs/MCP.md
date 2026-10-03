@@ -77,9 +77,9 @@ provided by the identity vendor.
   using it at least monthly never is.
 
 ### Acceptance
-- `scripts/oauth-smoke.ts` passes against localhost and production.
-- `scripts/mcp-abuse.ts` (black-box: cross-tenant isolation, token lifecycle, endpoint hardening,
-  input abuse, transport) passes against fixtures from `scripts/mcp-fixtures.ts`.
+- `tests/e2e/oauth-smoke.ts` passes against localhost and production.
+- `tests/e2e/mcp-abuse.ts` (black-box: cross-tenant isolation, token lifecycle, endpoint hardening,
+  input abuse, transport) passes against fixtures from `tests/e2e/mcp-fixtures.ts`.
 - Claude Code connects via CIMD; claude.ai connects as a custom connector; both list tasks, create
   a task with a deadline, complete it and read routine history.
 - Disconnecting in Settings makes the next tool call fail with 401.
@@ -164,14 +164,14 @@ a bare GET.
 | Phase | Contents | Verified by |
 |---|---|---|
 | 1 | deps, `APP_URL`, schema + migration `add_oauth`, shared validation (`src/lib/validation/*`), pure OAuth helpers, vitest | `npm test` (18 tests), lint, build |
-| 2 | proxy matcher + return path, discovery documents, MCP route | `scripts/oauth-smoke.ts` discovery section |
-| 3 | store, CIMD resolver, DCR, consent page + actions, token endpoint | `scripts/oauth-smoke.ts` end-to-end |
+| 2 | proxy matcher + return path, discovery documents, MCP route | `tests/e2e/oauth-smoke.ts` discovery section |
+| 3 | store, CIMD resolver, DCR, consent page + actions, token endpoint | `tests/e2e/oauth-smoke.ts` end-to-end |
 | 4 | `src/lib/mcp/tools.ts` | Claude Code against localhost |
 | 5 | Settings → Connected apps; focus refetch | Disconnect → 401 → reconnect |
 | 6 | docs, Vercel `APP_URL`, production smoke, claude.ai connector | prod run of the smoke script; connector connects |
 
 ```bash
-npx tsx --tsconfig tsconfig.json scripts/oauth-smoke.ts http://localhost:3001
+npx tsx --tsconfig tsconfig.json tests/e2e/oauth-smoke.ts http://localhost:3001
 ```
 
 The script prints the authorize URL and waits; open it, approve, and it continues through code
@@ -183,8 +183,8 @@ Written black-box (the author saw only the public endpoints, the specs, and mint
 tokens) and kept that way: it is the test that stays honest when the implementation changes.
 
 ```bash
-npx tsx --tsconfig tsconfig.json --env-file=.env.local scripts/mcp-fixtures.ts <owner email> > /tmp/fixtures.json
-npx tsx --tsconfig tsconfig.json scripts/mcp-abuse.ts /tmp/fixtures.json
+npx tsx --tsconfig tsconfig.json --env-file=.env.local tests/e2e/mcp-fixtures.ts <owner email> > /tmp/fixtures.json
+npx tsx --tsconfig tsconfig.json tests/e2e/mcp-abuse.ts /tmp/fixtures.json
 ```
 
 Fixtures provision two extra users and mint valid, expired, and revoked token sets directly into

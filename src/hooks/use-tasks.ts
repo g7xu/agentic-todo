@@ -25,14 +25,14 @@ async function fetchTasks(): Promise<TaskDTO[]> {
   return data.tasks;
 }
 
-/** Refetches on window focus, unlike the app's other queries: this read is
- * also what records routine days that passed while the tab sat in the
- * background. */
+/** Refetched on every focus, even inside staleTime: this read is what records
+ * routine days that passed while the tab sat in the background, and tasks
+ * may have changed through a connected app in the meantime. */
 export function useTasks() {
   return useQuery({
     queryKey: TASKS_KEY,
     queryFn: fetchTasks,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: "always",
   });
 }
 
