@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser, UnauthenticatedError } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
+import { getTimezone } from "@/lib/data/profile";
 import { todayStr } from "@/lib/date";
 import { listTasks } from "@/lib/data/tasks";
 import { recordMissedDays } from "@/lib/data/routines";
@@ -8,11 +8,7 @@ import { recordMissedDays } from "@/lib/data/routines";
 export async function GET() {
   try {
     const user = await requireUser();
-    const profile = await prisma.profile.findUnique({
-      where: { id: user.id },
-      select: { timezone: true },
-    });
-    const today = todayStr(profile?.timezone ?? "UTC");
+    const today = todayStr(await getTimezone(user.id));
 
     // The tasks read is the single fetch behind the ['tasks'] query, so it
     // doubles as the moment past routine days get recorded. A failure here
