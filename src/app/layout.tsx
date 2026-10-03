@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agentic Todoist",
-  description: "A Todoist-style task manager with an agentic chat assistant.",
+  title: "agenticTODO",
+  description: "A personal task manager that Claude can read and act on through MCP.",
 };
 
 export default function RootLayout({

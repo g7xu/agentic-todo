@@ -36,7 +36,7 @@ export function protectedResourceMetadata() {
     additionalMetadata: {
       scopes_supported: [...SCOPES],
       bearer_methods_supported: ["header"],
-      resource_name: "Agentic Todoist",
+      resource_name: "agenticTODO",
     },
   });
 }

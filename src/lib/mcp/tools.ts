@@ -44,7 +44,7 @@ import {
  * id comes only from the verified bearer token (AG4, TDD §7).
  */
 
-export const INSTRUCTIONS = `Agentic Todoist: the user's personal task system.
+export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - A task has a planned date (dueDate: when they intend to do it) and an optional hard deadline. Moving work around changes dueDate; deadline changes only when the real due date changes.
 - priority: 1 is highest, 4 is the default.
 - Tasks live in projects; omit projectId to use the Inbox.

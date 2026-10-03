@@ -694,7 +694,7 @@ async function sectionC() {
   const writeTools = tools.filter((t) => /^(create|update|delete|complete|uncomplete|bulk)_/.test(t.name));
   check(writeTools.every((t) => Array.isArray(t.inputSchema.required) && t.inputSchema.required.length > 0), "C every write tool declares required inputs", writeTools.map((t) => `${t.name}:${t.inputSchema.required?.join("+")}`).join(" "));
   // Every tool listed answers tools/call (at least with a validation error, never an unknown-tool error).
-  let unknownOnCall: string[] = [];
+  const unknownOnCall: string[] = [];
   for (const t of ["list_projects", "list_routines"]) {
     const r = await call(t, {});
     if (r.rpcError) unknownOnCall.push(t);

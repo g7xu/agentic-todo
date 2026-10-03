@@ -1,4 +1,4 @@
-# Decisions — Agentic Todoist
+# Decisions — agenticTODO
 
 Decisions surfaced by the 10-round review/revise pass over [PRD.md](./PRD.md),
 [TDD.md](./TDD.md), [PROMPTS.md](./PROMPTS.md). Last updated: 2026-10-02 (D7 — the agent surface is a

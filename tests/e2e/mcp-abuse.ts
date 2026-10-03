@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Adversarial black-box tester for the Agentic Todoist MCP server + its OAuth 2.1 AS.
+ * Adversarial black-box tester for the agenticTODO MCP server + its OAuth 2.1 AS.
  *
  * Run: npx tsx --tsconfig tsconfig.json tests/e2e/mcp-abuse.ts <fixtures.json>
  *

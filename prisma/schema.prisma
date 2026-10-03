@@ -1,4 +1,4 @@
-// Agentic Todoist — Prisma schema (TDD §3).
+// agenticTODO — Prisma schema (TDD §3).
 // Prisma owns only the `public` schema. The Neon Auth (Better Auth) tables live
 // in the `neon_auth` schema and are managed by Neon — we do NOT model or FK to
 // them here. `userId`/`Profile.id` store `neon_auth.user.id` (a uuid) as an

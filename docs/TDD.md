@@ -1,4 +1,4 @@
-# TDD — Agentic Todoist (Technical Design Document)
+# TDD — agenticTODO (Technical Design Document)
 
 **Owner:** Jason
 **Status:** Draft v1

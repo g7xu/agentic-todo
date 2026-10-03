@@ -1,4 +1,4 @@
-# PRD — Agentic Todoist
+# PRD — agenticTODO
 
 **Owner:** Jason (guoxuan.xu8@gmail.com)
 **Status:** Draft v1

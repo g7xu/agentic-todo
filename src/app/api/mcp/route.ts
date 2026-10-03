@@ -17,7 +17,7 @@ function getHandler() {
   handler ??= withMcpAuth(
     createMcpHandler(registerTools, {
       instructions: INSTRUCTIONS,
-      serverInfo: { name: "agentic-todoist", version: "1.0.0" },
+      serverInfo: { name: "agentictodo", version: "1.0.0" },
     }),
     verifyAccessToken,
     {
