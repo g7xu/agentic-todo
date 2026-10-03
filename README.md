@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# agenticTODO
 
-## Getting Started
+A personal task manager that Claude can read and act on through MCP.
 
-First, run the development server:
+The web app at [todo.g7xu.dev](https://todo.g7xu.dev) holds your tasks, projects and routines.
+Claude connects to the same account through a remote MCP server at `https://todo.g7xu.dev/api/mcp`,
+so you can ask it what is due, how a routine is going, or to add and reschedule work.
+
+## Connect Claude Code
+
+You need [Claude Code](https://code.claude.com) and an account on agenticTODO. If you have never
+signed in, the first connection creates your account and Inbox.
+
+1. Register the server once, for all your projects:
+
+   ```bash
+   claude mcp add -s user --transport http agentictodo https://todo.g7xu.dev/api/mcp
+   ```
+
+2. Start a session with `claude`, run `/mcp`, select **agentictodo** and choose **Authenticate**.
+
+3. Your browser opens the consent page. Sign in with Google or an email code if asked, check that
+   it says **claude.ai wants to connect**, and click **Approve**. The page says you will be returned
+   to an app on this computer; that is Claude Code waiting on a local port, and is expected.
+
+4. Back in the terminal, `/mcp` shows `agentictodo` as connected. Try:
+
+   - "What's due this week?"
+   - "Add 'renew passport' for Friday with a deadline of the 20th."
+   - "How is my daily review routine going over the last four weeks?"
+   - "Move everything due today that isn't priority 1 to tomorrow."
+
+Claude asks before each write tool runs; that prompt is your approval. Choosing "Always allow" on
+a write tool lets Claude edit without asking.
+
+### Connect claude.ai instead
+
+Go to **Customize → Connectors → Add custom connector**, enter `https://todo.g7xu.dev/api/mcp`,
+choose **Sign in now**, and approve on the consent page. Then enable the connector for a chat from
+the **+** menu.
+
+### Disconnecting and re-signing in
+
+- **Settings → Connected apps** lists every connection; **Disconnect** takes effect immediately.
+- If you do not use the connector for 30 days, Claude asks you to sign in again. Run `/mcp` and
+  choose **Authenticate**.
+- To remove it from Claude Code entirely: `claude mcp remove -s user agentictodo`.
+
+## What Claude can do
+
+Read and change tasks and projects; read routines and their completion history. Routines are
+edited in the app. The tool list and the security model are in [docs/MCP.md](docs/MCP.md).
+
+## Development
+
+Requires Node.js 22+ and a Neon project with Neon Auth.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.local.example .env.local   # fill in the Neon values; APP_URL must match the dev URL
+npm run dev -- -p 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then point Claude Code at `http://localhost:3001/api/mcp` under a different name to test against
+the dev database.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test                 # unit tests
+npm run lint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+End-to-end and security suites, which need a running server, are described in
+[tests/e2e/README.md](tests/e2e/README.md).
 
-## Learn More
+## Docs
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [docs/MCP.md](docs/MCP.md): MCP server and OAuth design, security checklist, deploy checklist
+- [docs/DECISIONS.md](docs/DECISIONS.md): product and architecture decisions
+- [docs/AGENT.md](docs/AGENT.md): what the agent is for

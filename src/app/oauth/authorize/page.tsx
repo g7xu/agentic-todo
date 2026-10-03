@@ -9,7 +9,11 @@ import {
 import { resolveCimdClient } from "@/lib/oauth/cimd";
 import { resourceUrl, type Scope } from "@/lib/oauth/config";
 import { OAuthError } from "@/lib/oauth/errors";
-import { appendParams, redirectUriAllowed } from "@/lib/oauth/redirect-uri";
+import {
+  appendParams,
+  isLoopbackUri,
+  redirectUriAllowed,
+} from "@/lib/oauth/redirect-uri";
 import { decodeResume, RESUME_PARAM, resumeUrl } from "@/lib/oauth/resume";
 import { getClient, type OAuthClient } from "@/lib/oauth/store";
 import { approveAuthorization, denyAuthorization } from "./actions";
@@ -114,7 +118,11 @@ export default async function AuthorizePage({
   }
 
   const host = clientHost(client);
-  const redirectHost = new URL(request.redirect_uri).host;
+  const redirectUrl = new URL(request.redirect_uri);
+  const redirectHost = redirectUrl.host;
+  // A loopback redirect means the client is a program on this computer
+  // (Claude Code, a desktop app); naming the address alone reads as an error.
+  const toThisComputer = isLoopbackUri(redirectUrl);
   const hidden = {
     client_id: request.client_id,
     redirect_uri: request.redirect_uri,
@@ -159,7 +167,9 @@ export default async function AuthorizePage({
               It registered itself{client.name ? <> as “{client.name}”</> : null}.
               Anyone can register, so that name proves nothing. Approve only if
               you started this from a tool you trust and expect to be sent to{" "}
-              <span className="font-mono">{redirectHost}</span>.
+              {toThisComputer ? "an app on this computer" : (
+                <span className="font-mono">{redirectHost}</span>
+              )}.
             </p>
           </>
         )}
@@ -178,9 +188,20 @@ export default async function AuthorizePage({
         </ul>
 
         <p className="text-muted-foreground mt-5 text-xs">
-          After you approve, you will be sent to{" "}
-          <span className="font-mono">{redirectHost}</span>. Only connect if
-          that is where you started.
+          {toThisComputer ? (
+            <>
+              After you approve, you will be returned to an app running on this
+              computer (<span className="font-mono">{redirectHost}</span>), such
+              as Claude Code in your terminal. Only connect if you just started
+              this from that app.
+            </>
+          ) : (
+            <>
+              After you approve, you will be sent to{" "}
+              <span className="font-mono">{redirectHost}</span>. Only connect if
+              that is where you started.
+            </>
+          )}
         </p>
 
         <div className="mt-6 flex gap-2">
