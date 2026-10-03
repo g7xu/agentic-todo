@@ -1,19 +1,34 @@
-# Decisions — Agentic Todoist
+# Decisions — agenticTODO
 
 Decisions surfaced by the 10-round review/revise pass over [PRD.md](./PRD.md),
-[TDD.md](./TDD.md), [PROMPTS.md](./PROMPTS.md). Last updated: 2026-06-29 (backend stack switch — D6 —
-folded in across all four docs; auth provider corrected to Neon Auth's Better Auth / `@neondatabase/auth`).
+[TDD.md](./TDD.md), [PROMPTS.md](./PROMPTS.md). Last updated: 2026-10-02 (D7 — the agent surface is a
+remote MCP server, spec in [MCP.md](./MCP.md)).
 
 Two kinds of entries:
 - ✅ **Provisionally resolved** — the docs already chose a default and wrote it in. Listed so you can
   veto. If you're happy, no action.
-- **Owner-decided (D1–D6)** — the product trade-offs that were left open are now answered
-  (2026-06-28; D6 the backend-stack switch on 2026-06-29) and folded into the docs. Recorded below
-  with the chosen option for each.
+- **Owner-decided (D1–D7)** — the product trade-offs that were left open are now answered
+  (2026-06-28; D6 the backend-stack switch on 2026-06-29; D7 the MCP surface on 2026-10-02) and
+  folded into the docs. Recorded below with the chosen option for each.
 
 ---
 
 ## Resolved (owner-decided 2026-06-28)
+
+### D7 — Agent surface: remote MCP server with an in-app OAuth 2.1 authorization server (decided 2026-10-02)
+The agent surface is a **remote MCP server at `/api/mcp`**, not an in-app chat (removed in PR #31)
+and not a local stdio server. Full spec in [MCP.md](./MCP.md).
+- **Why remote:** one URL works from claude.ai, Claude Desktop and Claude Code; a stdio server would
+  need the production database URL on a laptop and cannot be reached from the web or mobile apps.
+- **Why an in-app authorization server:** claude.ai custom connectors require OAuth (static bearer
+  headers are beta-only), and managed Neon Auth cannot host the Better Auth OAuth-provider plugin.
+  Neon Auth proves the human; the app's OAuth layer (CIMD + DCR, PKCE S256, hashed opaque tokens,
+  rotated refresh) proves the client and records consent. Swapping identity providers would be the
+  expensive migration; five endpoints are not.
+- **Scopes and tokens:** `tasks:read` + `tasks:write` granted together; access 1 h, refresh 30 d
+  sliding; revoke from Settings → Connected apps.
+- **Tool surface v1:** tasks and projects read/write, routines and history read-only. Every tool wraps
+  a `src/lib/data` function (AGENT.md AG4).
 
 ### D6 — Backend stack: Supabase → Neon + Neon Auth (Better Auth) + Prisma (decided 2026-06-29)
 Switched the backend off Supabase to **Neon Postgres + Neon Auth (Better Auth) + Prisma 7**:

@@ -30,8 +30,14 @@ async function fetchRoutines(): Promise<RoutineDTO[]> {
   return data.routines;
 }
 
+/** Refetched on every focus: routine days can be completed through MCP while
+ * the tab is in the background. */
 export function useRoutines() {
-  return useQuery({ queryKey: ROUTINES_KEY, queryFn: fetchRoutines });
+  return useQuery({
+    queryKey: ROUTINES_KEY,
+    queryFn: fetchRoutines,
+    refetchOnWindowFocus: "always",
+  });
 }
 
 export type RoutineDay = {
@@ -56,6 +62,7 @@ export function useRoutineHistory(days: number) {
       if (!res.ok) throw new Error("Failed to load routine history");
       return res.json();
     },
+    refetchOnWindowFocus: "always",
   });
 }
 

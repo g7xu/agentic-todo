@@ -1,4 +1,4 @@
-# Build Prompts — Agentic Todoist
+# Build Prompts — agenticTODO
 
 Phase-by-phase prompts to execute the build. Feed **one phase at a time**; each ends in something
 runnable so you can verify before moving on. Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md).

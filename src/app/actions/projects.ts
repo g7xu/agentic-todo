@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import {
   createProject,
@@ -8,9 +7,10 @@ import {
   renameProject,
 } from "@/lib/data/projects";
 import type { ProjectDTO } from "@/lib/types";
-
-const nameSchema = z.string().trim().min(1).max(120);
-const idSchema = z.string().uuid();
+import {
+  idSchema,
+  projectNameSchema as nameSchema,
+} from "@/lib/validation/projects";
 
 export async function createProjectAction(name: string): Promise<ProjectDTO> {
   const user = await requireUser();

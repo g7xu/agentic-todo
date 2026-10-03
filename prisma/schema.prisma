@@ -1,4 +1,4 @@
-// Agentic Todoist — Prisma schema (TDD §3).
+// agenticTODO — Prisma schema (TDD §3).
 // Prisma owns only the `public` schema. The Neon Auth (Better Auth) tables live
 // in the `neon_auth` schema and are managed by Neon — we do NOT model or FK to
 // them here. `userId`/`Profile.id` store `neon_auth.user.id` (a uuid) as an
@@ -115,4 +115,90 @@ model Routine {
 
   @@index([userId, active])
   @@map("routines")
+}
+
+// ---------------------------------------------------------------------------
+// OAuth 2.1 authorization server backing the MCP endpoint (docs/MCP.md §3).
+// Public clients only: no client secret exists anywhere in this schema, so a
+// client is nothing more than its registered redirect URIs. Codes and tokens
+// are stored as SHA-256 hashes; the plaintext leaves the server exactly once.
+// ---------------------------------------------------------------------------
+
+/// An OAuth client. `id` is the public client_id: the https URL of its Client
+/// ID Metadata Document for `kind = 'cimd'`, or a server-issued opaque id for
+/// `kind = 'dcr'` (dynamic registration).
+model OAuthClient {
+  id           String    @id
+  kind         String /// 'cimd' | 'dcr'
+  name         String?
+  redirectUris String[]  @map("redirect_uris")
+  document     Json? /// the metadata document as fetched / as registered; shown in Settings
+  fetchedAt    DateTime? @map("fetched_at") @db.Timestamptz(6) /// CIMD only: last successful fetch, the cache clock
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  codes  OAuthCode[]
+  grants OAuthGrant[]
+
+  @@map("oauth_clients")
+}
+
+/// One-time authorization code bound to a PKCE challenge. `grantId` is written
+/// at exchange so that a replay of an already-used code can revoke what it
+/// produced (OAuth 2.1 §4.1.2).
+model OAuthCode {
+  id            String    @id @default(uuid()) @db.Uuid
+  codeHash      String    @unique @map("code_hash")
+  clientId      String    @map("client_id")
+  userId        String    @map("user_id") @db.Uuid
+  redirectUri   String    @map("redirect_uri")
+  scope         String /// space-separated
+  codeChallenge String    @map("code_challenge") /// S256 only
+  resource      String? /// RFC 8707 indicator, when the client sent one
+  grantId       String?   @map("grant_id") @db.Uuid
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt        DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("oauth_codes")
+}
+
+/// A user's standing authorization of one client — a "Connected app" in
+/// Settings. Created when the code is exchanged, not at consent, so an
+/// abandoned consent never shows up as connected. Deleting the row revokes
+/// every token under it.
+model OAuthGrant {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  clientId   String    @map("client_id")
+  scope      String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  client OAuthClient  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tokens OAuthToken[]
+
+  @@index([userId])
+  @@map("oauth_grants")
+}
+
+/// Access and refresh tokens. A refresh token is marked `revokedAt` when it is
+/// rotated rather than deleted, so presenting it again is detectable as a
+/// replay (which revokes the whole grant).
+model OAuthToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  grantId   String    @map("grant_id") @db.Uuid
+  kind      String /// 'access' | 'refresh'
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  grant OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([expiresAt])
+  @@map("oauth_tokens")
 }

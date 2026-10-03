@@ -30,7 +30,7 @@ export function AppShell({
           grow with content, letting pages run past the viewport bottom. */}
       <div className="flex h-dvh flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-          <span className="font-semibold tracking-tight">Agentic Todoist</span>
+          <span className="font-semibold tracking-tight">agenticTODO</span>
           <div className="flex items-center gap-3">
             <span className="text-muted-foreground text-sm">{userEmail}</span>
             {/* UserButton's built-in Settings item links to

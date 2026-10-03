@@ -1,5 +1,5 @@
 {
-  "name": "guoxuan_todo",
+  "name": "agentictodo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,11 +13,17 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "demo:seed": "tsx --tsconfig tsconfig.json scripts/seed-routine-demo.ts",
-    "demo:clean": "tsx --tsconfig tsconfig.json scripts/seed-routine-demo.ts clean"
+    "demo:clean": "tsx --tsconfig tsconfig.json scripts/seed-routine-demo.ts clean",
+    "test": "vitest run",
+    "test:e2e:fixtures": "tsx --tsconfig tsconfig.json --env-file=.env.local tests/e2e/mcp-fixtures.ts",
+    "test:e2e:abuse": "tsx --tsconfig tsconfig.json tests/e2e/mcp-abuse.ts",
+    "test:e2e:blackbox": "tsx --tsconfig tsconfig.json tests/e2e/app-blackbox.ts",
+    "test:e2e:smoke": "tsx --tsconfig tsconfig.json tests/e2e/oauth-smoke.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "@modelcontextprotocol/server": "2.3.0",
     "@neondatabase/auth": "^0.4.2-beta",
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.8.0",
@@ -27,7 +33,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.22.0",
-    "next": "16.2.9",
+    "mcp-handler": "2.2.0",
+    "next": "16.3.8",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.0",
     "react": "19.2.4",
@@ -46,10 +53,11 @@
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.3.8",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
