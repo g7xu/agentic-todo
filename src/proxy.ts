@@ -34,13 +34,23 @@ function isLoginRedirect(res: Response): boolean {
   }
 }
 
+/** A JSON client cannot act on a redirect to a sign-in page; it needs a 401. */
+function unauthorizedJson(): NextResponse {
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
+
 export default async function proxy(req: NextRequest) {
+  const isApi = req.nextUrl.pathname.startsWith("/api/");
+
   if (req.method === "GET") {
     const decision = await neonMiddleware(req);
-    if (req.nextUrl.pathname === RETURN_PATH_ROUTE && isLoginRedirect(decision)) {
-      const back = resumeUrl(req.nextUrl.search.replace(/^\?/, ""));
-      const login = `${LOGIN_URL}?redirectTo=${encodeURIComponent(back)}`;
-      return NextResponse.redirect(new URL(login, req.url));
+    if (isLoginRedirect(decision)) {
+      if (isApi) return unauthorizedJson();
+      if (req.nextUrl.pathname === RETURN_PATH_ROUTE) {
+        const back = resumeUrl(req.nextUrl.search.replace(/^\?/, ""));
+        const login = `${LOGIN_URL}?redirectTo=${encodeURIComponent(back)}`;
+        return NextResponse.redirect(new URL(login, req.url));
+      }
     }
     return decision;
   }
@@ -56,7 +66,11 @@ export default async function proxy(req: NextRequest) {
   );
   const decision = await neonMiddleware(asGet);
   const redirected = decision.status >= 300 && decision.status < 400;
-  if (redirected) return NextResponse.redirect(new URL(LOGIN_URL, req.url));
+  if (redirected) {
+    return isApi
+      ? unauthorizedJson()
+      : NextResponse.redirect(new URL(LOGIN_URL, req.url));
+  }
   return NextResponse.next();
 }
 
@@ -67,8 +81,10 @@ export const config = {
   // bounced to a sign-in page; Next.js internals; and static files (anything
   // with a dot, which also covers /.well-known). `/` is listed explicitly
   // because the negative-lookahead pattern misses it.
+  // Each excluded segment is anchored with `(?:/|$)` so that a future
+  // `/api/mcp-admin` or `/authz` is protected rather than silently skipped.
   matcher: [
     "/",
-    "/((?!api/auth|api/mcp|auth|oauth/token|oauth/register|_next|favicon.ico|.*\\.).*)",
+    "/((?!(?:api/auth|api/mcp|auth|oauth/token|oauth/register|_next)(?:/|$)|favicon\\.ico$|.*\\.).*)",
   ],
 };

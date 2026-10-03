@@ -26,7 +26,7 @@ export type { OAuthClient };
  * grant (OAuth 2.1 §4.3.1). Client races resolve in milliseconds, so the
  * window stays short to keep a stolen token's replay opportunity small.
  */
-const REFRESH_REUSE_GRACE_MS = 10 * 1000;
+const REFRESH_REUSE_GRACE_MS = 3 * 1000;
 
 /** `lastUsedAt` is informational; one write per grant per interval is plenty. */
 const LAST_USED_RESOLUTION_MS = 5 * 60 * 1000;
@@ -154,13 +154,6 @@ export async function claimCode(code: string): Promise<ClaimedCode> {
   );
 }
 
-export async function recordCodeGrant(
-  codeId: string,
-  grantId: string,
-): Promise<void> {
-  await prisma.oAuthCode.update({ where: { id: codeId }, data: { grantId } });
-}
-
 // --- grants and tokens -----------------------------------------------------
 
 export type TokenPair = {
@@ -194,13 +187,24 @@ function newTokenRows(grantId: string) {
   };
 }
 
+/**
+ * Issues the first pair of a grant. The code that produced it is linked in
+ * the same transaction, so there is no moment at which the grant exists but
+ * a replay of the code could not find it to revoke.
+ */
 export async function createGrantWithTokens(input: {
   userId: string;
   clientId: string;
   scope: string;
+  codeId: string;
 }): Promise<TokenPair & { grantId: string }> {
+  const { codeId, ...grantData } = input;
   return prisma.$transaction(async (tx) => {
-    const grant = await tx.oAuthGrant.create({ data: input });
+    const grant = await tx.oAuthGrant.create({ data: grantData });
+    await tx.oAuthCode.update({
+      where: { id: codeId },
+      data: { grantId: grant.id },
+    });
     const t = newTokenRows(grant.id);
     await tx.oAuthToken.createMany({ data: t.rows });
     return {
@@ -275,10 +279,26 @@ export async function rotateRefreshToken(
   );
 
   if (outcome.kind === "issued") return outcome.pair;
-  if (outcome.kind === "replay") {
-    await prisma.oAuthGrant.deleteMany({ where: { id: outcome.grantId } });
-  }
+  if (outcome.kind === "replay") await revokeGrantWithRetry(outcome.grantId);
   throw invalidGrant();
+}
+
+/**
+ * Containment must not fail quietly: a replay has been detected and the
+ * thief's chain is alive until this delete lands. Three attempts, then a
+ * loud log line for whoever watches the function logs.
+ */
+async function revokeGrantWithRetry(grantId: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await prisma.oAuthGrant.deleteMany({ where: { id: grantId } });
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  console.error(`REPLAY DETECTED but grant ${grantId} could not be revoked:`, lastError);
 }
 
 /**

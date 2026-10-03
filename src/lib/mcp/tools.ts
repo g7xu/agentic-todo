@@ -55,6 +55,23 @@ export const INSTRUCTIONS = `Agentic Todoist: the user's personal task system.
 const WRITE_SCOPE = "tasks:write";
 const MAX_BULK_IDS = 100;
 
+/**
+ * Messages the data layer throws for conditions the model can act on. Only
+ * these exact strings reach the model; anything else is a server fault and
+ * is replaced, because driver errors carry query text and file paths.
+ */
+const EXPECTED_DATA_ERRORS = new Set([
+  "Task not found",
+  "Project not found",
+  "Routine not found",
+  "Routine tasks can't change project",
+  "Routine tasks can't be rescheduled",
+  "The Inbox project cannot be deleted",
+]);
+
+/** A message composed inside a tool handler for the model to read. */
+class ToolInputError extends Error {}
+
 type Principal = { userId: string; scopes: string[] };
 
 function principal(ctx: ServerContext): Principal {
@@ -97,7 +114,10 @@ async function run(
         .join("; ");
       return fail(`Invalid input: ${detail}`);
     }
-    if (e instanceof Error && /not found|cannot|must be/i.test(e.message)) {
+    if (
+      e instanceof ToolInputError ||
+      (e instanceof Error && EXPECTED_DATA_ERRORS.has(e.message))
+    ) {
       return fail(e.message);
     }
     // Anything else is a server fault. The SDK would otherwise hand the raw
@@ -321,10 +341,10 @@ export function registerTools(server: McpServer): void {
         let to: string;
         if (args.from !== undefined && args.to !== undefined) {
           if (diffDays(args.from, args.to) < 0) {
-            throw new Error("from must be on or before to");
+            throw new ToolInputError("from must be on or before to");
           }
           if (diffDays(args.from, args.to) >= MAX_HISTORY_DAYS) {
-            throw new Error(`the window must be at most ${MAX_HISTORY_DAYS} days`);
+            throw new ToolInputError(`the window must be at most ${MAX_HISTORY_DAYS} days`);
           }
           from = args.from;
           to = args.to;

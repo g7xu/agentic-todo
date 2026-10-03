@@ -24,10 +24,25 @@ const registrationSchema = z.object({
   response_types: z.array(z.literal("code")).optional(),
 });
 
+/**
+ * A display name is shown to a human on the consent page, so anything that
+ * could disguise it is removed: control characters and the Unicode
+ * bidirectional and zero-width controls that let "evil" render as "Claude".
+ */
+function printableName(name: string | undefined): string | null {
+  const cleaned = name
+    ?.replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤⁦-⁩﻿]/g, "")
+    .trim();
+  return cleaned ? cleaned : null;
+}
+
 export async function POST(req: Request) {
   try {
     if (!req.headers.get("content-type")?.includes("application/json")) {
       throw new OAuthError("invalid_client_metadata", "expected application/json");
+    }
+    if (Number(req.headers.get("content-length")) > MAX_BODY_BYTES) {
+      throw new OAuthError("invalid_client_metadata", "request body too large", 413);
     }
     const text = await req.text();
     if (text.length > MAX_BODY_BYTES) {
@@ -55,7 +70,7 @@ export async function POST(req: Request) {
     }
 
     const client = await createDcrClient({
-      name: parsed.data.client_name || null,
+      name: printableName(parsed.data.client_name),
       redirectUris: parsed.data.redirect_uris,
       document: body,
     });

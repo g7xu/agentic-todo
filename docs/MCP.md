@@ -27,11 +27,12 @@ provided by the identity vendor.
 - **DM2 — Client identity: CIMD and DCR, public clients only.** Claude identifies itself with its
   published Client ID Metadata Document; other clients may register dynamically. No client secret
   exists anywhere.
-- **DM3 — Scopes `tasks:read` and `tasks:write`, always granted together.** Consent shows both; there
-  is no partial grant in v1. `offline_access` is accepted and ignored; refresh tokens are always
-  issued.
+- **DM3 — Scopes `tasks:read` and `tasks:write`; a client receives exactly the subset it asks
+  for, never more.** An absent `scope` means both. Consent lists only the requested scopes; the
+  write tools refuse a read-only grant. `offline_access` is accepted and ignored; refresh tokens
+  are always issued.
 - **DM4 — Opaque tokens, hashed at rest.** Access 1 h; refresh 30 d sliding, rotated on every use,
-  with a 10 s reuse grace for racing clients; a later replay, or a refresh presented by the wrong
+  with a 3 s reuse grace for racing clients; a later replay, or a refresh presented by the wrong
   client, revokes the whole grant.
 - **DM5 — Issuer pinned by `APP_URL`,** never derived from request headers.
 - **DM6 — `/oauth/authorize` stays behind the Neon middleware; `/oauth/token`, `/oauth/register`
@@ -66,9 +67,10 @@ provided by the identity vendor.
   `claude mcp add --transport http todo https://guoxuan-todo.vercel.app/api/mcp`, then `/mcp` to
   sign in. Either way Claude sends the browser to the consent page; an unauthenticated user signs
   in with Google or email OTP first and returns to the same consent.
-- **Consent page** shows who is asking (for CIMD, always the hostname of the client_id URL, because
-  the document's own name is self-asserted), the signed-in email, both scopes in plain words, and
-  the redirect host. Approve or Deny.
+- **Consent page** headlines a fact the server verified, never the client's self-chosen name: for
+  CIMD the hostname of the client_id URL, for a self-registered client the words "An unverified app"
+  with the redirect host. The name appears as secondary text. Then the signed-in email, the
+  requested scopes in plain words, and the redirect host. Approve or Deny.
 - **Daily use.** Claude proposes; a write tool call is the user's accept. The Claude client's own
   tool-approval prompt is the one-tap accept (AG3). The web app refetches its lists on tab focus.
 - **Settings → Connected apps** lists grants (name, host, scopes, connected, last used) with
@@ -114,13 +116,14 @@ No FK to `profiles`, consistent with the rest of the schema.
 
 1. Consent → code (hashed, bound to client, redirect_uri, PKCE challenge, scope, resource).
 2. Exchange → code claimed atomically (`updateMany` with `used_at IS NULL`), checks, then grant +
-   access (1 h) + refresh (30 d) in one transaction; `grant_id` written back onto the code.
+   access (1 h) + refresh (30 d) + the code's `grant_id` in one transaction, so no moment exists in
+   which a replay of the code could fail to find what to revoke.
 3. Each MCP call → hash lookup, kind/expiry/revocation checks, `last_used_at` touched at most
    every 5 min.
 4. Refresh → old refresh marked revoked, new pair issued; expired rows of the grant pruned.
-   Presenting a revoked refresh within 10 s is served (racing clients); later it deletes the grant.
+   Presenting a revoked refresh within 3 s is served (racing clients); later it deletes the grant.
    The deletion is committed outside the deciding transaction, so the `invalid_grant` that follows
-   cannot roll it back.
+   cannot roll it back; it is retried three times and logged loudly if it still fails.
 5. Code replay after exchange deletes the grant it produced. Disconnect deletes the grant.
 
 ### Security checklist
@@ -136,10 +139,20 @@ No FK to `profiles`, consistent with the rest of the schema.
   `${APP_URL}/api/mcp` (`invalid_target`).
 - Consent: server action + session cookie + Next origin check + full re-validation; the client is
   re-read from the database, never fetched, at decision time; `ensureUserProvisioned` runs here.
-- CIMD: https only; no IP literals, `localhost`, `.local`, `.internal`; no redirects; 5 s timeout;
-  64 KB cap; `client_id` must equal the fetched URL; fetched only after sign-in; cached.
-- DCR: public clients only, body ≤ 8 KB, redirect URIs constrained. No rate limiter (Vercel
-  Firewall rules are the no-code option if abuse appears).
+- CIMD: https on the default port only; the name must contain a dot and must not be `localhost`,
+  `.local`, `.internal`, `.localhost` or `.arpa` (trailing dots stripped first); the name is
+  resolved and every address must be public (no loopback, private, link-local, carrier-NAT,
+  multicast, ULA, or mapped IPv4); no redirects (pinned by a test against a local 302); 5 s
+  timeout; the body is read with a byte counter and abandoned past 64 KB; every failure returns
+  the same generic error with the reason logged server-side, so the fetch cannot act as a port
+  probe; `client_id` must equal the fetched URL; fetched only after sign-in; cached. A DNS
+  rebinding window between resolution and connection remains; the `client_id` echo requirement is
+  the second line of defence.
+- DCR: public clients only, `content-length` checked before the body is read, body ≤ 8 KB,
+  redirect URIs constrained, display names stripped of control, bidirectional and zero-width
+  characters. No in-app rate limiter: see the deploy checklist.
+- Headers: `frame-ancestors 'none'` and `X-Frame-Options: DENY` on the consent page; HSTS,
+  `nosniff` and a strict referrer policy everywhere (`next.config.ts`).
 - `redirectTo` is only ever a relative `/oauth/authorize?r=…` built by the proxy or the page, and
   the decoded token is re-validated as a fresh authorization request.
 - Per-user scoping: every tool resolves `userId` from the grant behind the verified token.
@@ -152,6 +165,23 @@ No FK to `profiles`, consistent with the rest of the schema.
 
 Preview deployments are unsupported for MCP (no database, pinned issuer); the metadata routes still
 render harmlessly.
+
+### Deploy checklist
+
+1. `APP_URL` set in Vercel Production.
+2. A Vercel Firewall rate rule on `POST /oauth/register` and `GET /oauth/authorize` (for example
+   20 requests per minute per IP). Registration is open by protocol design and the app has no
+   in-process limiter; the firewall is the right layer.
+3. Next.js at or above 16.3.8 (`npm audit` clean of advisories against `next`).
+
+### Accepted risks
+
+- Within the 3 s reuse grace, a refresh token captured in transit and replayed immediately yields a
+  second live chain that is not detected. Token-family linking would close this; the window was
+  judged too small to justify it in v1.
+- An access token outlives an expired refresh token until its own hour is up.
+- Unused self-registered clients are never pruned; the firewall rule bounds their growth.
+- Task text is returned to the model verbatim; a connected agent must treat it as data.
 
 ### Escape hatch (not built)
 
@@ -191,5 +221,7 @@ Fixtures provision two extra users and mint valid, expired, and revoked token se
 the store (dev database only). The suite's first run found that grant revocation on refresh
 replay was being rolled back by the surrounding transaction, that `2026-02-30` was silently
 stored as March 2nd, and that driver errors reached the model verbatim; all three are fixed and
-asserted. Known, accepted: an access token outlives an expired refresh token until its own hour
-is up; task text is returned verbatim, so a connected agent must treat it as data.
+asserted. A later white-box security audit added: a verified headline on the consent page, scope
+subsetting, DNS-level SSRF checks and a streaming cap on the CIMD fetch, grant linking inside the
+exchange transaction, retried revocation, anchored proxy exclusions, framing headers, a
+dev-database guard on the fixtures script, and the Next.js upgrade. See "Accepted risks" above.

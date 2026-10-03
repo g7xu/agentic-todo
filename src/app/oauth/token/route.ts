@@ -5,12 +5,14 @@ import { isValidCodeVerifier, verifyS256 } from "@/lib/oauth/pkce";
 import {
   claimCode,
   createGrantWithTokens,
-  recordCodeGrant,
   rotateRefreshToken,
   type TokenPair,
 } from "@/lib/oauth/store";
 
 export const dynamic = "force-dynamic";
+
+/** Far above any legitimate form body; refused before the body is read. */
+const MAX_BODY_BYTES = 8 * 1024;
 
 /**
  * RFC 6749 §3.2 token endpoint. Form-encoded only, because that is what every
@@ -29,7 +31,14 @@ export async function POST(req: Request) {
         { status: 415, headers: NO_STORE_HEADERS },
       );
     }
-    const form = new URLSearchParams(await req.text());
+    if (Number(req.headers.get("content-length")) > MAX_BODY_BYTES) {
+      throw new OAuthError("invalid_request", "request body too large", 413);
+    }
+    const body = await req.text();
+    if (body.length > MAX_BODY_BYTES) {
+      throw new OAuthError("invalid_request", "request body too large", 413);
+    }
+    const form = new URLSearchParams(body);
     const param = (name: string): string | undefined => {
       const values = form.getAll(name);
       if (values.length > 1) {
@@ -115,13 +124,12 @@ async function exchangeCode(input: {
     throw new OAuthError("invalid_target", "resource does not match the authorization");
   }
 
-  const grant = await createGrantWithTokens({
+  return createGrantWithTokens({
     userId: claimed.userId,
     clientId,
     scope: claimed.scope,
+    codeId: claimed.id,
   });
-  await recordCodeGrant(claimed.id, grant.grantId);
-  return grant;
 }
 
 export function OPTIONS() {

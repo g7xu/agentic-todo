@@ -8,7 +8,7 @@ import {
   parseRequestedScopes,
   type AuthorizeRequest,
 } from "@/lib/oauth/authorize-request";
-import { SCOPE_STRING } from "@/lib/oauth/config";
+import { resourceUrl } from "@/lib/oauth/config";
 import { OAuthError } from "@/lib/oauth/errors";
 import { appendParams, redirectUriAllowed } from "@/lib/oauth/redirect-uri";
 import { createCode, getClient } from "@/lib/oauth/store";
@@ -18,7 +18,9 @@ import { createCode, getClient } from "@/lib/oauth/store";
  * trusts nothing from the form: the session is re-checked, every field is
  * re-validated, and the client is re-read from the database (never fetched).
  */
-async function validatedRequest(formData: FormData): Promise<AuthorizeRequest> {
+async function validatedRequest(
+  formData: FormData,
+): Promise<{ request: AuthorizeRequest; scope: string }> {
   const fields: Record<string, string> = {
     response_type: "code",
     code_challenge_method: "S256",
@@ -32,19 +34,23 @@ async function validatedRequest(formData: FormData): Promise<AuthorizeRequest> {
   if (!client || !redirectUriAllowed(client.redirectUris, request.redirect_uri)) {
     throw new OAuthError("invalid_client", "client or redirect_uri is not registered");
   }
-  parseRequestedScopes(request.scope);
-  return request;
+  if (request.resource !== undefined && request.resource !== resourceUrl()) {
+    throw new OAuthError("invalid_target", "resource does not name this server");
+  }
+  // What the client asked for is what it gets, never more (RFC 6749 §3.3).
+  const scope = parseRequestedScopes(request.scope).join(" ");
+  return { request, scope };
 }
 
 export async function approveAuthorization(formData: FormData): Promise<void> {
   const user = await requireUser();
-  const request = await validatedRequest(formData);
+  const { request, scope } = await validatedRequest(formData);
   await ensureUserProvisioned(user.id, user.email);
   const code = await createCode({
     clientId: request.client_id,
     userId: user.id,
     redirectUri: request.redirect_uri,
-    scope: SCOPE_STRING,
+    scope,
     codeChallenge: request.code_challenge,
     resource: request.resource ?? null,
   });
@@ -53,7 +59,7 @@ export async function approveAuthorization(formData: FormData): Promise<void> {
 
 export async function denyAuthorization(formData: FormData): Promise<void> {
   await requireUser();
-  const request = await validatedRequest(formData);
+  const { request } = await validatedRequest(formData);
   redirect(
     appendParams(request.redirect_uri, {
       error: "access_denied",

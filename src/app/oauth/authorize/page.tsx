@@ -7,7 +7,7 @@ import {
   type AuthorizeRequest,
 } from "@/lib/oauth/authorize-request";
 import { resolveCimdClient } from "@/lib/oauth/cimd";
-import { resourceUrl, SCOPES, type Scope } from "@/lib/oauth/config";
+import { resourceUrl, type Scope } from "@/lib/oauth/config";
 import { OAuthError } from "@/lib/oauth/errors";
 import { appendParams, redirectUriAllowed } from "@/lib/oauth/redirect-uri";
 import { decodeResume, RESUME_PARAM, resumeUrl } from "@/lib/oauth/resume";
@@ -91,8 +91,9 @@ export default async function AuthorizePage({
   }
 
   let clientError: OAuthError | null = null;
+  let scopes: Scope[] = [];
   try {
-    parseRequestedScopes(request.scope);
+    scopes = parseRequestedScopes(request.scope);
   } catch (e) {
     clientError = asOAuthError(e);
   }
@@ -123,25 +124,52 @@ export default async function AuthorizePage({
     resource: request.resource,
   };
 
+  // The headline is always a fact this server verified: the host that
+  // published the client's identity, or, for a self-registered client, a
+  // warning. The name a client gives itself is shown but never leads.
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
       <div className="rounded-lg border bg-card p-6 shadow-sm">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {client.name ?? host ?? "An application"} wants to connect
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {host ? (
-            <>
-              Identified by <span className="font-mono">{host}</span>.
-            </>
-          ) : (
-            "Registered directly with this server."
-          )}{" "}
+        {host ? (
+          <>
+            <h1 className="text-xl font-semibold tracking-tight">
+              <span className="font-mono">{host}</span> wants to connect
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {client.name ? (
+                <>
+                  It calls itself “{client.name}”, verified against the
+                  identity document published at{" "}
+                  <span className="font-mono">{host}</span>.
+                </>
+              ) : (
+                <>
+                  Verified against the identity document published at{" "}
+                  <span className="font-mono">{host}</span>.
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-xl font-semibold tracking-tight">
+              An unverified app wants to connect
+            </h1>
+            <p className="mt-1 text-sm">
+              It registered itself{client.name ? <> as “{client.name}”</> : null}.
+              Anyone can register, so that name proves nothing. Approve only if
+              you started this from a tool you trust and expect to be sent to{" "}
+              <span className="font-mono">{redirectHost}</span>.
+            </p>
+          </>
+        )}
+        <p className="text-muted-foreground mt-2 text-sm">
           You are signed in as {session.user.email}.
         </p>
 
-        <ul className="mt-5 space-y-2 text-sm">
-          {SCOPES.map((s) => (
+        <p className="mt-5 text-sm font-medium">It is asking to:</p>
+        <ul className="mt-1 space-y-2 text-sm">
+          {scopes.map((s) => (
             <li key={s} className="flex gap-2">
               <span aria-hidden>✓</span>
               <span>{SCOPE_COPY[s]}</span>
