@@ -62,9 +62,9 @@ provided by the identity vendor.
 
 ### Behaviour
 - **Connect.** In claude.ai: Customize → Connectors → Add custom connector →
-  `https://guoxuan-todo.vercel.app/api/mcp`, "Sign in now", "Register automatically" (or Claude's
+  `https://todo.g7xu.dev/api/mcp`, "Sign in now", "Register automatically" (or Claude's
   published identity). In Claude Code:
-  `claude mcp add --transport http todo https://guoxuan-todo.vercel.app/api/mcp`, then `/mcp` to
+  `claude mcp add --transport http todo https://todo.g7xu.dev/api/mcp`, then `/mcp` to
   sign in. Either way Claude sends the browser to the consent page; an unauthenticated user signs
   in with Google or email OTP first and returns to the same consent.
 - **Consent page** headlines a fact the server verified, never the client's self-chosen name: for
@@ -161,14 +161,15 @@ No FK to `profiles`, consistent with the rest of the schema.
 
 | Var | Where | Value |
 |---|---|---|
-| `APP_URL` | `.env.local`, Vercel Production | `http://localhost:3001` locally (port 3000 is taken by Docker on the owner's machine); `https://guoxuan-todo.vercel.app` in production |
+| `APP_URL` | `.env.local`, Vercel Production | `http://localhost:3001` locally (port 3000 is taken by Docker on the owner's machine); `https://todo.g7xu.dev` in production. Not set on Preview (see below). |
 
-Preview deployments are unsupported for MCP (no database, pinned issuer); the metadata routes still
-render harmlessly.
+On a Vercel preview deployment `APP_URL` is unset and the issuer falls back to that deployment's
+own `VERCEL_URL`, so each preview is a self-consistent OAuth server against the development
+database. Production never falls back: a missing `APP_URL` fails loudly.
 
 ### Deploy checklist
 
-1. `APP_URL` set in Vercel Production.
+1. `APP_URL` = `https://todo.g7xu.dev` set in Vercel Production; the domain added under Neon → Auth → Domains; the `.vercel.app` alias set to redirect to it.
 2. A Vercel Firewall rate rule on `POST /oauth/register` and `GET /oauth/authorize` (for example
    20 requests per minute per IP). Registration is open by protocol design and the app has no
    in-process limiter; the firewall is the right layer.

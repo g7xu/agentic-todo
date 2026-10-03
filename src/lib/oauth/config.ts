@@ -8,9 +8,18 @@
 
 const DEV_ISSUER = "http://localhost:3000";
 
+/**
+ * Resolution order: `APP_URL` when set; on a Vercel preview deployment the
+ * deployment's own URL, since every preview has a different one and no fixed
+ * value could be right; a hard failure in production, where a wrong issuer
+ * would make every discovery document lie; the Next.js default port in dev.
+ */
 export function issuer(): string {
   const configured = process.env.APP_URL?.replace(/\/+$/, "");
   if (configured) return configured;
+  if (process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "APP_URL is not set; it is the OAuth issuer and must match the public URL",
