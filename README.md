@@ -77,3 +77,10 @@ End-to-end and security suites, which need a running server, are described in
 - [docs/MCP.md](docs/MCP.md): MCP server and OAuth design, security checklist, deploy checklist
 - [docs/DECISIONS.md](docs/DECISIONS.md): product and architecture decisions
 - [docs/AGENT.md](docs/AGENT.md): what the agent is for
+
+## License
+
+[MIT](LICENSE) © 2026 Guoxuan Xu
+
+Dependencies keep their own licenses. One of them, `ua-parser-js` v2, which `@neondatabase/auth`
+pulls in for its sessions UI, is licensed AGPL-3.0.
