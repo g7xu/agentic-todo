@@ -1,42 +1,17 @@
 "use server";
 
-import {
-  classifyAuthDeletion,
-  type AuthDeletionOutcome,
-  type AuthDeletionResult,
-} from "@/lib/auth/account-deletion";
-import { auth } from "@/lib/auth/server";
 import { requireUser } from "@/lib/auth/session";
-import { deleteAccountData } from "@/lib/data/account";
+import { deleteAccount } from "@/lib/data/account";
 
 /**
- * Deletes the caller's app data, then their Neon Auth user.
+ * Deletes the caller's account. If this rejects, nothing was deleted.
  *
- * App data goes first, in one transaction. The reverse order could strand
- * it: once the auth user is gone the owner can never sign in again to
- * retry, and a failed data delete would leave tasks no one can see or
- * remove. Deleted in this order, the worst case is a sign-in record with
- * no data behind it, which is reported to the user and logged.
- *
- * A throw from the auth call is folded into `sign-in-kept`, so when this
- * action rejects, nothing was deleted.
+ * Cookies are left for the client to clear by visiting the sign-out page:
+ * changing one here makes Next re-render the current layout in the same
+ * response, and that render would still see the deleted user's cached
+ * session.
  */
-export async function deleteAccountAction(): Promise<AuthDeletionOutcome> {
+export async function deleteAccountAction(): Promise<void> {
   const user = await requireUser();
-  await deleteAccountData(user.id);
-
-  let result: AuthDeletionResult;
-  try {
-    result = await auth.deleteUser();
-  } catch (error) {
-    result = { data: null, error };
-  }
-  const outcome = classifyAuthDeletion(result);
-  if (outcome === "sign-in-kept") {
-    console.error("deleteAccount: app data deleted, auth user kept", {
-      userId: user.id,
-      error: result.error,
-    });
-  }
-  return outcome;
+  await deleteAccount(user.id);
 }

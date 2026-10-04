@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
 import { prisma } from "@/lib/db";
-import { ensureUserProvisioned } from "@/lib/provisioning";
+import { provisionSessionUser } from "@/lib/provisioning";
 import { TimezoneCapture } from "@/components/timezone-capture";
 import { AppShell } from "@/components/app-shell";
 
@@ -20,7 +20,9 @@ export default async function AppLayout({
   if (!session?.user) redirect("/auth/sign-in");
 
   const user = session.user;
-  await ensureUserProvisioned(user.id, user.email ?? "");
+  if (!(await provisionSessionUser(user.id, user.email ?? ""))) {
+    redirect("/auth/sign-out");
+  }
 
   const profile = await prisma.profile.findUnique({
     where: { id: user.id },

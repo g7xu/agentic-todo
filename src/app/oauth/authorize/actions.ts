@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { ensureUserProvisioned } from "@/lib/provisioning";
+import { provisionSessionUser } from "@/lib/provisioning";
 import {
   parseAuthorizeRequest,
   parseRequestedScopes,
@@ -45,7 +45,9 @@ async function validatedRequest(
 export async function approveAuthorization(formData: FormData): Promise<void> {
   const user = await requireUser();
   const { request, scope } = await validatedRequest(formData);
-  await ensureUserProvisioned(user.id, user.email);
+  if (!(await provisionSessionUser(user.id, user.email))) {
+    redirect("/auth/sign-out");
+  }
   const code = await createCode({
     clientId: request.client_id,
     userId: user.id,

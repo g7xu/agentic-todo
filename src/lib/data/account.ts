@@ -51,15 +51,18 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
 }
 
 /**
- * Removes every app-owned row for the user in one transaction: tasks,
- * routines, projects, the profile, and the OAuth grants (their tokens
- * cascade) and codes that let MCP clients act for them. Shared
- * `OAuthClient` rows stay, since other users' grants point at them.
+ * Deletes the account in one transaction: every app-owned row (tasks,
+ * routines, projects, profile, and the OAuth grants, tokens and codes that
+ * let MCP clients act for the user) and the user's row in Neon Auth's
+ * `neon_auth.user` table. Shared `OAuthClient` rows stay, since other
+ * users' grants point at them.
  *
- * The Neon Auth user is not touched here; it lives in a schema this app
- * does not own and is deleted through the auth API.
+ * The auth row is deleted with SQL because managed Neon Auth disables its
+ * own delete-user endpoint. `tests/e2e/account-delete.ts` checks that the
+ * user's sessions and linked sign-in methods go with it; if Neon's schema
+ * stops allowing this delete, the transaction fails and nothing is deleted.
  */
-export async function deleteAccountData(userId: string): Promise<void> {
+export async function deleteAccount(userId: string): Promise<void> {
   const where = { userId };
   // Order follows the foreign keys: tasks reference routines and projects,
   // routines reference projects, and all three reference the profile.
@@ -70,5 +73,6 @@ export async function deleteAccountData(userId: string): Promise<void> {
     prisma.routine.deleteMany({ where }),
     prisma.project.deleteMany({ where }),
     prisma.profile.deleteMany({ where: { id: userId } }),
+    prisma.$executeRaw`DELETE FROM neon_auth."user" WHERE id = ${userId}::uuid`,
   ]);
 }

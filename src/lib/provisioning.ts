@@ -44,6 +44,23 @@ export async function ensureUserProvisioned(
   }
 }
 
+/**
+ * `ensureUserProvisioned` for a user read from a session, which can outlive
+ * its account: session data is cached in a cookie, so for a few minutes
+ * after `deleteAccount` a request may still carry the deleted user's id.
+ * Returns false, creating nothing, when the Neon Auth user no longer exists.
+ */
+export async function provisionSessionUser(
+  userId: string,
+  email: string,
+): Promise<boolean> {
+  const [{ exists }] = await prisma.$queryRaw<{ exists: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM neon_auth."user" WHERE id = ${userId}::uuid) AS exists`;
+  if (!exists) return false;
+  await ensureUserProvisioned(userId, email);
+  return true;
+}
+
 /** True for a Prisma unique-constraint violation (error code P2002). */
 function isUniqueViolation(e: unknown): boolean {
   return (
