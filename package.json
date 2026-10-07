@@ -18,7 +18,8 @@
     "test:e2e:fixtures": "tsx --tsconfig tsconfig.json --env-file=.env.local tests/e2e/mcp-fixtures.ts",
     "test:e2e:abuse": "tsx --tsconfig tsconfig.json tests/e2e/mcp-abuse.ts",
     "test:e2e:blackbox": "tsx --tsconfig tsconfig.json tests/e2e/app-blackbox.ts",
-    "test:e2e:smoke": "tsx --tsconfig tsconfig.json tests/e2e/oauth-smoke.ts"
+    "test:e2e:smoke": "tsx --tsconfig tsconfig.json tests/e2e/oauth-smoke.ts",
+    "test:e2e:account": "tsx --tsconfig tsconfig.json --env-file=.env.local tests/e2e/account-delete.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

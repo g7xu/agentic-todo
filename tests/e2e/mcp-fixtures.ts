@@ -16,29 +16,10 @@ import { createTask } from "@/lib/data/tasks";
 import { ACCESS_TTL_S, REFRESH_TTL_S, SCOPE_STRING } from "@/lib/oauth/config";
 import { generateToken, hashToken } from "@/lib/oauth/tokens";
 import { ensureUserProvisioned } from "@/lib/provisioning";
+import { assertDevDatabase } from "./dev-database";
 
 const FIXTURE_CLIENT = "dcr_fixture_abuse_client";
 
-/**
- * Neon endpoint ids this script may write to. It deletes users and mints a
- * live token for the owner, so pointing it at production by accident must
- * fail before the first query. Add a host here or set E2E_ALLOW_DB_HOST.
- */
-const ALLOWED_DB_ENDPOINTS = ["ep-spring-fire-at5o8npl"];
-
-function assertDevDatabase(): void {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  const host = new URL(url).hostname;
-  const allowed =
-    ALLOWED_DB_ENDPOINTS.some((ep) => host.startsWith(ep)) ||
-    process.env.E2E_ALLOW_DB_HOST === host;
-  if (!allowed) {
-    throw new Error(
-      `refusing to write fixtures to ${host}: not a known development endpoint`,
-    );
-  }
-}
 const USER_B_EMAIL = "fixture-user-b@example.invalid";
 const USER_C_EMAIL = "fixture-user-c@example.invalid";
 
