@@ -78,13 +78,15 @@ export const config = {
   // Protect the index route plus everything except: the auth handler and
   // auth UI pages; the MCP endpoint and the OAuth token/registration
   // endpoints, which answer with their own 401/400 JSON and must never be
-  // bounced to a sign-in page; Next.js internals; and static files (anything
-  // with a dot, which also covers /.well-known). `/` is listed explicitly
-  // because the negative-lookahead pattern misses it.
+  // bounced to a sign-in page; the privacy, terms and support pages, which
+  // signed-out visitors and directory reviewers must be able to read;
+  // Next.js internals; and static files (anything with a dot, which also
+  // covers /.well-known). `/` is listed explicitly because the
+  // negative-lookahead pattern misses it.
   // Each excluded segment is anchored with `(?:/|$)` so that a future
   // `/api/mcp-admin` or `/authz` is protected rather than silently skipped.
   matcher: [
     "/",
-    "/((?!(?:api/auth|api/mcp|auth|oauth/token|oauth/register|_next)(?:/|$)|favicon\\.ico$|.*\\.).*)",
+    "/((?!(?:api/auth|api/mcp|auth|oauth/token|oauth/register|privacy|terms|support|_next)(?:/|$)|favicon\\.ico$|.*\\.).*)",
   ],
 };
