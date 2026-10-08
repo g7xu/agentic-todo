@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +47,11 @@ export function YourData() {
     <div className="grid gap-4">
       <div className="grid gap-2">
         <p className="text-muted-foreground text-sm">
-          Download your tasks, projects and routines as a JSON file.
+          Download your tasks, projects and routines as a JSON file. The{" "}
+          <Link href="/privacy" className="underline underline-offset-2">
+            privacy policy
+          </Link>{" "}
+          lists everything stored about you.
         </p>
         <div>
           <Button variant="outline" size="sm" asChild>
