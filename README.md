@@ -4,7 +4,11 @@
 
 <h1 align="center">agenticTODO</h1>
 
-<p align="center">A personal task manager that Claude can read and act on through MCP.</p>
+<p align="center">A free todo list with no AI inside. Your coding agent is the AI.</p>
+
+<p align="center">
+  <img src="public/screenshot-upcoming.png" width="800" alt="The Upcoming board: a column per day holding tasks with priorities, deadlines and routines">
+</p>
 
 The web app at [todo.g7xu.dev](https://todo.g7xu.dev) holds your tasks, projects and routines.
 Claude connects to the same account through a remote MCP server at `https://todo.g7xu.dev/api/mcp`,
@@ -79,8 +83,11 @@ End-to-end and security suites, which need a running server, are described in
 ## Docs
 
 - [docs/MCP.md](docs/MCP.md): MCP server and OAuth design, security checklist, deploy checklist
-- [docs/DECISIONS.md](docs/DECISIONS.md): product and architecture decisions
 - [docs/AGENT.md](docs/AGENT.md): what the agent is for
+- [docs/design/](docs/design/): the technical design and decision log the app was
+  built from, including [DECISIONS.md](docs/design/DECISIONS.md)
+
+Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

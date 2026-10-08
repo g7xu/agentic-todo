@@ -1,9 +1,9 @@
 # Routines (daily recurring tasks) — Feature Spec & Build Plan
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+**Owner:** Guoxuan Xu
 **Status:** Draft v1
 **Last updated:** 2026-07-14
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [PROMPTS.md](./PROMPTS.md) · [DECISIONS.md](./DECISIONS.md)
+Companion docs: [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md)
 
 ---
 
@@ -92,7 +92,7 @@ conflict with these, **these win** (kept for history rather than rewritten):
   `Task.fromRoutineId` stays in the schema — no migration. Nothing writes it now; it still carries
   the provenance of catch-ups minted before this change, and those rows are left alone (deleting
   live tasks the user may have replanned would be worse than leaving them). Triage's
-  `isRoutineCatchUp` signal (TRIAGE.md §3.3) therefore still reads a real column, but on a set that
+  `isRoutineCatchUp` signal (from the since-removed triage spec) therefore still reads a real column, but on a set that
   can only shrink.
 
 - **RV9 — History is correctable, and gaps are backfilled (2026-07-18).** Two halves that only make
@@ -428,7 +428,7 @@ the end-of-day review can propose shrinking/rescheduling/pausing a struggling ro
 
 ## 4. Build phases
 
-Same protocol as [PROMPTS.md](./PROMPTS.md): feed one phase at a time; "Done when" is the exit
+Feed one phase at a time; "Done when" is the exit
 criteria; each phase ends runnable.
 
 ---

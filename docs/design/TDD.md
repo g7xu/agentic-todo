@@ -3,7 +3,7 @@
 **Owner:** Jason
 **Status:** Draft v1
 **Last updated:** 2026-06-28
-**Companion docs:** [PRD.md](./PRD.md) · [PROMPTS.md](./PROMPTS.md)
+**Companion docs:** [DECISIONS.md](./DECISIONS.md)
 
 ---
 
@@ -592,7 +592,7 @@ which is surfaced honestly here.
   equivalent) suffices; an Upstash/Vercel KV token bucket is an equivalent drop-in. The **default cap is
   250 model-invoking requests/user/day**; the limit constant lives in one place (tunable).
   - **Owner allowlist (unlimited).** An `OWNER_EMAILS` allowlist constant (containing
-    `guoxuan.xu8@gmail.com`) is checked **before** the counter: a request from an allowlisted user
+    the owner's address) is checked **before** the counter: a request from an allowlisted user
     **bypasses the cap entirely** (the counter is neither checked nor incremented), so the owner is
     never throttled on their own gateway key. The allowlist lives in **one place** alongside the cap
     constant. All non-allowlisted users are subject to the 250/day default. This is **separate from** the K=20 per-turn context window (§6.1), which only bounds cost

@@ -1,9 +1,9 @@
 # Task estimates (and a duration control that isn't awkward) — Feature Spec & Build Plan
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+**Owner:** Guoxuan Xu
 **Status:** Draft v1
 **Last updated:** 2026-07-26
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [PROMPTS.md](./PROMPTS.md) · [DECISIONS.md](./DECISIONS.md) · [ROUTINES.md](./ROUTINES.md)
+Companion docs: [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md)
 
 ---
 
