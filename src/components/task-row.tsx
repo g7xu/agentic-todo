@@ -192,7 +192,7 @@ export function TaskRow({
         <>
           <button
             aria-label="Edit task"
-            className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+            className="hover:bg-accent rounded p-1 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               setEditing(true);
@@ -203,7 +203,7 @@ export function TaskRow({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Task options"
-              className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              className="hover:bg-accent rounded p-1 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreHorizontal className="size-4" />

@@ -40,7 +40,14 @@ const NAV = [
   // entry point to /settings.
 ];
 
-export function AppSidebar() {
+export function AppSidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  /** Called when a link is followed; the drawer uses it to close itself. */
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const { data: projects = [] } = useProjects();
   const createProject = useCreateProject();
@@ -68,13 +75,19 @@ export function AppSidebar() {
   }
 
   return (
-    <nav className="bg-muted/30 flex w-60 shrink-0 flex-col gap-1 border-r p-3 text-sm">
+    <nav
+      className={cn(
+        "bg-muted/30 flex w-60 shrink-0 flex-col gap-1 border-r p-3 text-sm",
+        className,
+      )}
+    >
       {NAV.map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={cn(
               "flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
               active ? "bg-accent font-medium" : "hover:bg-accent/60",
@@ -144,14 +157,19 @@ export function AppSidebar() {
               active ? "bg-accent font-medium" : "hover:bg-accent/60",
             )}
           >
-            <Link href={href} className="flex flex-1 items-center gap-2">
-              <Hash className="size-4" />
+            <Link
+              href={href}
+              onClick={onNavigate}
+              className="flex min-w-0 flex-1 items-center gap-2"
+            >
+              <Hash className="size-4 shrink-0" />
               <span className="truncate">{p.name}</span>
             </Link>
+            {/* Always visible below md: touch screens have no hover. */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 aria-label={`${p.name} options`}
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
               >
                 <MoreHorizontal className="size-4" />
               </DropdownMenuTrigger>

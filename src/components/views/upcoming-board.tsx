@@ -5,7 +5,8 @@ import {
   closestCorners,
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
@@ -283,7 +284,7 @@ function TaskCard({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Task options"
-              className="hover:bg-accent rounded p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
+              className="hover:bg-accent rounded p-0.5 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
@@ -333,7 +334,9 @@ function SortableTask({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
         dragDisabled ? "cursor-pointer" : "cursor-grab",
-        "touch-none",
+        // Not touch-none: that would stop a finger from scrolling the board
+        // through a card. The touch sensor's hold delay separates the two.
+        "touch-manipulation",
         isDragging && "opacity-40",
       )}
       {...attributes}
@@ -659,8 +662,13 @@ export function UpcomingBoard() {
   // setState-in-effect sync and keeps the cache the single source of truth.
   const view = activeId ? items : serverItems;
 
+  // A finger that moves straight away is scrolling the board; only a hold
+  // starts a drag. A mouse drags on movement alone.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
 
   function findContainer(id: string): string | undefined {
@@ -759,7 +767,7 @@ export function UpcomingBoard() {
   const activeTask = activeId ? taskById.get(activeId) : null;
 
   return (
-    <div className="flex h-full flex-col p-6">
+    <div className="flex h-full flex-col p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">Upcoming</h1>
       <DndContext
         sensors={sensors}

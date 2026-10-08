@@ -57,7 +57,7 @@ export default function RoutinesPage() {
   const [deleting, setDeleting] = useState<RoutineDTO | null>(null);
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
+    <div className="mx-auto max-w-2xl p-4 md:p-6">
       <div className="mb-1 flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Routines</h1>
         <Button size="sm" onClick={() => setCreating(true)}>
@@ -113,21 +113,23 @@ export default function RoutinesPage() {
                   {r.content}
                   {!r.active && " (paused)"}
                 </span>
-                <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                  <span>{cadenceLabel(r)}</span>
+                <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                  <span className="whitespace-nowrap">{cadenceLabel(r)}</span>
                   {r.estimate !== null && (
                     <span className="flex items-center gap-0.5" title="Estimated">
                       <Clock className="size-3" />
                       {formatDuration(r.estimate)}
                     </span>
                   )}
-                  {project && !project.isInbox && <span># {project.name}</span>}
+                  {project && !project.isInbox && (
+                    <span className="max-w-full truncate"># {project.name}</span>
+                  )}
                 </div>
               </div>
               <button
                 aria-label={r.active ? "Pause routine" : "Resume routine"}
                 title={r.active ? "Pause" : "Resume"}
-                className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="hover:bg-accent rounded p-1 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                 onClick={() =>
                   update.mutate({ id: r.id, input: { active: !r.active } })
                 }
@@ -141,7 +143,7 @@ export default function RoutinesPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger
                   aria-label="Routine options"
-                  className="hover:bg-accent rounded p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  className="hover:bg-accent rounded p-1 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
                 >
                   <MoreHorizontal className="size-4" />
                 </DropdownMenuTrigger>
