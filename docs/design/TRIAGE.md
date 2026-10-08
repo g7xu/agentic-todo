@@ -1,9 +1,13 @@
 # Overdue triage (chat-triggered, one pass, one approval) — Feature Spec & Build Plan
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+> **Superseded.** Written for an in-app chat assistant that was later removed in favour of the
+> MCP server (see [DECISIONS.md](DECISIONS.md) and [AGENT.md](../AGENT.md)); the source files it
+> links to no longer exist. Kept as design history.
+
+**Owner:** Guoxuan Xu
 **Status:** Draft v2 — supersedes v1 wholesale (2026-08-01, owner review)
 **Last updated:** 2026-08-01
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [PROMPTS.md](./PROMPTS.md) · [DECISIONS.md](./DECISIONS.md) · [ROUTINES.md](./ROUTINES.md) · [ESTIMATES.md](./ESTIMATES.md)
+Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [PROMPTS.md](./PROMPTS.md) · [DECISIONS.md](./DECISIONS.md) · [ROUTINES.md](../ROUTINES.md) · [ESTIMATES.md](../ESTIMATES.md)
 
 > **v1 → v2.** Draft v1 designed a durable state machine: `TriageRun`/`TriageItem` tables, a
 > cursor, per-item clarifying questions under a budget, resumability. Owner review killed it on the
@@ -35,7 +39,7 @@ is the cheapest possible way to stay in the loop.
 The existing `/api/review` two-phase propose/apply was already this shape in miniature — it is
 superseded, not because it was wrong, but because it is weak on three axes: its only verdict is "a
 different day", it sees no signals (`pushCount` does not exist yet), and it lives in a bolt-on panel
-instead of the conversation. The chat agent ([`route.ts`](../src/app/api/chat/route.ts)) is already
+instead of the conversation. The chat agent ([`route.ts`](../../src/app/api/chat/route.ts)) is already
 the standard loop — `streamText` + tools + `stopWhen` + `needsApproval` — so triage becomes **a tool
 that agent owns**, not a parallel subsystem.
 
@@ -44,7 +48,7 @@ that agent owns**, not a parallel subsystem.
 - **DT1 — Chat is the trigger; the pass is a tool.** Triage starts by talking to the assistant
   ("clear my overdue", "help me deal with this pile"), which calls a `triageOverdue` tool. A
   quick-action button may exist, but it just sends the canned message — exactly how the Review
-  Inbox button already works ([`chat-panel.tsx:129-143`](../src/components/chat/chat-panel.tsx#L129-L143)).
+  Inbox button already works ([`chat-panel.tsx:129-143`](../../src/components/chat/chat-panel.tsx#L129-L143)).
   One agent, one surface, one conversation history; and "also go through my inbox" later is the
   same conversation, not another subsystem.
 
@@ -56,7 +60,7 @@ that agent owns**, not a parallel subsystem.
 
 - **DT3 — The plan is the state, and it lives in the message.** The tool's output — the full plan
   JSON — is a tool part on the assistant message, and messages are already persisted verbatim to
-  Postgres and rehydrated on panel open (`Message.content`, TDD §3; [`conversation.ts`](../src/lib/ai/conversation.ts)).
+  Postgres and rehydrated on panel open (`Message.content`, TDD §3; [`conversation.ts`](../../src/lib/ai/conversation.ts)).
   Reload the page mid-triage and the digest is still there, **for free**. No `TriageRun` table, no
   cursor, no new schema beyond `pushCount`. Idempotency comes from apply-time re-validation (DT8),
   not from run bookkeeping.
@@ -312,7 +316,7 @@ it the idempotency (DT8) — implementable without server-side plan storage.
 ### 3.6 Digest UI (`src/components/chat/triage-digest.tsx`)
 
 Rendered from `chat-panel.tsx`'s part loop: where tool parts currently fall through to the generic
-"· toolName" line ([`chat-panel.tsx:211-215`](../src/components/chat/chat-panel.tsx#L211-L215)),
+"· toolName" line ([`chat-panel.tsx:211-215`](../../src/components/chat/chat-panel.tsx#L211-L215)),
 a `tool-triageOverdue` part in `output-available` state renders `<TriageDigest plan={part.output}>`
 instead. Local component state holds row inclusion/overrides (pre-apply edits are ephemeral by
 design — the persisted artifact is the *proposed* plan; the *applied* outcome arrives in the apply
@@ -387,7 +391,7 @@ double-apply and reload bullets.
   so the plan is waiting with coffee. Approving stays human-only.
 - **Inbox refinement on the digest pattern** — same shape, different columns: proposed *rewrite*,
   project, estimate, date per inbox task; one approve. Replaces the prose INBOX REVIEW workflow in
-  the chat system prompt ([`route.ts:35-42`](../src/app/api/chat/route.ts#L35-L42)).
+  the chat system prompt ([`route.ts:35-42`](../../src/app/api/chat/route.ts#L35-L42)).
 - **Auto-apply tiers** — once digest accuracy is trusted: cron applies non-destructive reschedules
   itself and the digest shrinks to destructive-only. Explicitly out until trust is earned (DT6).
 - **Learning from edits** — the apply payload records every human override of a proposed verdict;

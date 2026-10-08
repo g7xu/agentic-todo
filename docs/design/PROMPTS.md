@@ -306,7 +306,7 @@ in that column (due that column's date); a failed write rolls the card back to i
 > model call, TDD §7) using an atomic per-user, per-UTC-day counter keyed by the **Neon Auth (Better Auth) user id** (uuid)
 > (`(await auth.getSession()).data?.user.id`) — a Neon Postgres `(user_id, day, count)` upsert or KV token bucket.
 > The **default cap is 250 model-invoking
-> requests/user/day**, and an **`OWNER_EMAILS` allowlist** (containing `guoxuan.xu8@gmail.com`) is checked
+> requests/user/day**, and an **`OWNER_EMAILS` allowlist** (the owner's address) is checked
 > **before** the counter so the owner **bypasses the cap entirely** (counter neither checked nor
 > incremented); keep the cap constant and the allowlist in **one place** (TDD §7). Over the limit return
 > **HTTP 429** without invoking Grok, since every call bills the owner's shared `AI_GATEWAY_API_KEY`

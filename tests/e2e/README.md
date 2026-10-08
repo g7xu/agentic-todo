@@ -14,7 +14,7 @@ production. Design and acceptance criteria: [docs/MCP.md](../../docs/MCP.md) §4
 
 ```bash
 npm run test:e2e:smoke -- http://localhost:3001 --cimd
-npm run test:e2e:fixtures -- guoxuan.xu8@gmail.com > /tmp/fixtures.json
+npm run test:e2e:fixtures -- you@example.com > /tmp/fixtures.json
 npm run test:e2e:abuse -- /tmp/fixtures.json
 npm run test:e2e:blackbox -- /tmp/fixtures.json
 npm run test:e2e:account
@@ -26,3 +26,7 @@ by the previous run, so a suite started before a fixtures run will see its token
 The fixtures reset their own rows on every run. The abuse suite creates only `[abuse]`-prefixed
 data and deletes it; it never touches the owner's other tasks. Never run the fixtures against
 production.
+
+The fixtures and account scripts refuse any database whose Neon endpoint id is not listed in
+`E2E_DEV_DB_ENDPOINTS` in `.env.local` (comma-separated), so they cannot be pointed at production
+by accident.

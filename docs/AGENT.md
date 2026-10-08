@@ -1,9 +1,9 @@
 # Agent direction — what the assistant is actually for
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
-**Status:** Direction doc v1 — supersedes [TRIAGE.md](./TRIAGE.md) and [ROUTINES.md](./ROUTINES.md) §R3 *as next work*
+**Owner:** Guoxuan Xu
+**Status:** Direction doc v1 — supersedes [TRIAGE.md](./design/TRIAGE.md) and [ROUTINES.md](./ROUTINES.md) §R3 *as next work*
 **Last updated:** 2026-08-02
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [DECISIONS.md](./DECISIONS.md) · [ROUTINES.md](./ROUTINES.md) · [TRIAGE.md](./TRIAGE.md) · [ESTIMATES.md](./ESTIMATES.md)
+Companion docs: [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md) · [TRIAGE.md](./design/TRIAGE.md) · [ESTIMATES.md](./ESTIMATES.md)
 
 ---
 
@@ -37,10 +37,10 @@ visible in an Aug 2 screenshot:
 **Output routines are kept perfectly; thinking routines are not.**
 
 ```
-Job Application   17 done    0 missed
+Job applications  17 done    0 missed
 Building           6 done    0 missed
-日复盘             2 done   13 missed   ← 13 consecutive
-周复盘             0 done    1 missed
+Daily review             2 done   13 missed   ← 13 consecutive
+Weekly review             0 done    1 missed
 ```
 
 **Tasks are never revisited.** Of 57 active one-offs: 46 have no description, 43 no estimate,
@@ -59,7 +59,7 @@ disqualifies most of what had been designed.
 
 - **AG2 — No design may require a review session.** This is the binding constraint and the reason
   earlier plans failed. An agent that asks 1–2 clarifying questions across 23 Inbox items *is* a
-  review session; it is 日复盘 with better UX, and 日复盘 is 2-for-15. Applies equally to the triage
+  review session; it is Daily review with better UX, and Daily review is 2-for-15. Applies equally to the triage
   digest (which assumed the owner would sit and scan 23 rows) and to the prose INBOX REVIEW workflow
   currently in the chat system prompt.
 
@@ -87,7 +87,7 @@ Strict dependency order. Each stage is useful on its own.
 
 **See.** The agent is blind to what the owner asked for. `brief()` in `src/lib/ai/tools.ts` strips
 `completedAt` before handing tasks to the model, and no tool exposes routines at all. It could not
-tell you 日复盘 is 2-for-15 — even though `listRoutineHistory()` in `src/lib/data/routines.ts`
+tell you Daily review is 2-for-15 — even though `listRoutineHistory()` in `src/lib/data/routines.ts`
 already computes exactly that for the Activity grid. *"Review my historical task completion" is not
 unbuilt; it is impossible.*
 
@@ -130,7 +130,7 @@ resolve, because every other track calls these functions.
 
 **Done when** the chat answers, from real data: *"what did I finish last week?"* → 35 for the week of
 Jul 27; *"how's my daily review going?"* → 2 of 15, 13 missed in a row; *"which routines am I
-keeping?"* → Job Application and Building, perfect. A wrong number means the block is wrong, not the
+keeping?"* → Job applicationsand Building, perfect. A wrong number means the block is wrong, not the
 model.
 
 ### 5.2 Memory
@@ -157,7 +157,7 @@ Not designed yet. Open question in §6.
 Nothing built today outlives a single request, so nothing needs this yet. Three cases will need it,
 and adoption should wait for the first one to actually arrive:
 
-1. **The agent runs 日复盘 on a schedule** — no browser open, must survive a function timeout, retry
+1. **The agent runs Daily review on a schedule** — no browser open, must survive a function timeout, retry
    on a model 429.
 2. **A proposal that sits for hours** — AG3's one-tap accept is a human-in-the-loop interrupt:
    propose at 11pm, tap at 9am.

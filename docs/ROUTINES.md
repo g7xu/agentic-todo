@@ -1,9 +1,9 @@
 # Routines (daily recurring tasks) — Feature Spec & Build Plan
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+**Owner:** Guoxuan Xu
 **Status:** Draft v1
 **Last updated:** 2026-07-14
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [PROMPTS.md](./PROMPTS.md) · [DECISIONS.md](./DECISIONS.md)
+Companion docs: [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [PROMPTS.md](./design/PROMPTS.md) · [DECISIONS.md](./design/DECISIONS.md)
 
 ---
 
@@ -428,7 +428,7 @@ the end-of-day review can propose shrinking/rescheduling/pausing a struggling ro
 
 ## 4. Build phases
 
-Same protocol as [PROMPTS.md](./PROMPTS.md): feed one phase at a time; "Done when" is the exit
+Same protocol as [PROMPTS.md](./design/PROMPTS.md): feed one phase at a time; "Done when" is the exit
 criteria; each phase ends runnable.
 
 ---

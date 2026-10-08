@@ -2,7 +2,7 @@
 
 Decisions surfaced by the 10-round review/revise pass over [PRD.md](./PRD.md),
 [TDD.md](./TDD.md), [PROMPTS.md](./PROMPTS.md). Last updated: 2026-10-02 (D7 — the agent surface is a
-remote MCP server, spec in [MCP.md](./MCP.md)).
+remote MCP server, spec in [MCP.md](../MCP.md)).
 
 Two kinds of entries:
 - ✅ **Provisionally resolved** — the docs already chose a default and wrote it in. Listed so you can
@@ -17,7 +17,7 @@ Two kinds of entries:
 
 ### D7 — Agent surface: remote MCP server with an in-app OAuth 2.1 authorization server (decided 2026-10-02)
 The agent surface is a **remote MCP server at `/api/mcp`**, not an in-app chat (removed in PR #31)
-and not a local stdio server. Full spec in [MCP.md](./MCP.md).
+and not a local stdio server. Full spec in [MCP.md](../MCP.md).
 - **Why remote:** one URL works from claude.ai, Claude Desktop and Claude Code; a stdio server would
   need the production database URL on a laptop and cannot be reached from the web or mobile apps.
 - **Why an in-app authorization server:** claude.ai custom connectors require OAuth (static bearer
@@ -90,7 +90,7 @@ is a **view affordance only**: chat `'week'` stays the fixed rolling today…+6 
 
 ### D4 — What is the per-user daily AI request cap? → **250/day default, owner unlimited**
 The default cap is **250 model-invoking requests/user/day** (chat turns + review propose). An
-**`OWNER_EMAILS` allowlist** (containing `guoxuan.xu8@gmail.com`) is checked **before** the counter so the
+**`OWNER_EMAILS` allowlist** (the owner's address) is checked **before** the counter so the
 owner bypasses the cap entirely; the cap constant and allowlist live in one place. The cap is still
 incremented only immediately before the model call (chat `streamText` / review propose), exempting review
 apply and the empty-propose short-circuit. (PRD §7, TDD §7, PROMPTS Phase 5/6 updated.)

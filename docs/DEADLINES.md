@@ -1,8 +1,8 @@
 # Deadlines (planned date vs. hard date) — Feature Spec
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+**Owner:** Guoxuan Xu
 **Status:** Implemented 2026-08-01 (PR #22)
-Companion docs: [PRD.md](./PRD.md) · [TDD.md](./TDD.md) · [ESTIMATES.md](./ESTIMATES.md) · [ROUTINES.md](./ROUTINES.md) · [TRIAGE.md](./TRIAGE.md)
+Companion docs: [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [ESTIMATES.md](./ESTIMATES.md) · [ROUTINES.md](./ROUTINES.md) · [TRIAGE.md](./design/TRIAGE.md)
 
 ---
 
@@ -18,7 +18,7 @@ and "when it's actually due":
 
 This is Todoist's date-vs-deadline split. The immediate payoff is honesty in day-to-day
 rescheduling (pushing the plan around never quietly moves the real due date). The forward-looking
-payoff is docs/TRIAGE.md: the balancer gets a hard placement boundary, `unschedule` becomes a safe
+payoff is docs/design/TRIAGE.md: the balancer gets a hard placement boundary, `unschedule` becomes a safe
 verdict (see DL3), and the classifier can tell "dodged but harmless" from "dodged into a wall".
 
 ### Decisions (owner-decided 2026-08-01)
@@ -75,7 +75,7 @@ until ROUTINES §RV10 removed that mint.)
 
 ## 3. Deferred
 
-- **Deadline-aware triage** — the reason this field exists; see docs/TRIAGE.md (balancer placement
+- **Deadline-aware triage** — the reason this field exists; see docs/design/TRIAGE.md (balancer placement
   window `[proposed … min(horizon, deadline)]`, a `conflict` outcome for can't-fit-before-deadline,
   deadline distance as a classifier signal).
 - **Deadline on the Upcoming board** — deadline-only tasks have no column today; a "Deadlines"

@@ -1,6 +1,6 @@
 # PRD — agenticTODO
 
-**Owner:** Jason (guoxuan.xu8@gmail.com)
+**Owner:** Guoxuan Xu
 **Status:** Draft v1
 **Last updated:** 2026-06-28
 
@@ -221,7 +221,7 @@ These are **aspirational, non-gating** targets for v1 unless an instrumentation 
   `/api/review` endpoints **must** enforce a minimal **per-user daily request cap** (a simple counter).
   The default cap is **250 model-invoking requests/user/day** (chat turns + review propose), so a
   signed-up user cannot drive unbounded Grok calls on the owner's gateway key. The **owner email
-  (`guoxuan.xu8@gmail.com`) is allowlisted to unlimited** via an `OWNER_EMAILS` constant checked before
+  (the owner's address) is allowlisted to unlimited** via an `OWNER_EMAILS` constant checked before
   the counter — allowlisted users bypass the cap entirely. The cap default and the allowlist both live in
   **one place**. This is a production / cost-abuse safeguard, distinct from the per-turn context bounding
   (K=20 window) that only caps cost-per-call; see TDD §7. A richer token-bucket / spend cap is a v2 candidate.
