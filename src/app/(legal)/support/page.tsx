@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CONTACT_EMAIL } from "@/lib/legal";
+import { CONTACT_EMAIL, REPO_URL } from "@/lib/legal";
 import { resourceUrl } from "@/lib/oauth/config";
 
 export const metadata: Metadata = {
@@ -56,6 +56,13 @@ export default function SupportPage() {
         Settings → Your data. Deleting your account removes everything at
         once and cannot be undone. See the{" "}
         <a href="/privacy">privacy policy</a> for what is stored.
+      </p>
+
+      <h2>Source code</h2>
+      <p>
+        agenticTODO is open source under the MIT license:{" "}
+        <a href={REPO_URL}>{REPO_URL.replace("https://", "")}</a>. Bug
+        reports and pull requests are welcome there.
       </p>
 
       <h2>Report a security problem</h2>
