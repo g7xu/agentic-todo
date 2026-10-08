@@ -55,7 +55,8 @@ async function listTools() {
 }
 
 const READ_TOOLS = ["list_tasks", "list_projects", "list_routines", "get_routine_history"];
-const DESTRUCTIVE_TOOLS = ["delete_task", "bulk_delete"];
+/** The only writes that never overwrite or remove an existing row. */
+const ADDITIVE_TOOLS = ["create_task", "create_project"];
 
 /** Phrases that read as instructions to the model rather than facts about
  * the data. The connector directory rejects descriptions that steer the
@@ -86,7 +87,7 @@ describe("MCP tool surface", () => {
         expect(a.destructiveHint, t.name).toBe(false);
       } else {
         expect(a.readOnlyHint, t.name).toBe(false);
-        expect(a.destructiveHint, t.name).toBe(DESTRUCTIVE_TOOLS.includes(t.name));
+        expect(a.destructiveHint, t.name).toBe(!ADDITIVE_TOOLS.includes(t.name));
       }
     }
   });

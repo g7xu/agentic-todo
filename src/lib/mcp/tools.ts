@@ -57,13 +57,15 @@ const MAX_BULK_IDS = 100;
 
 /**
  * Tool annotations (MCP spec). Every tool acts only on the caller's own
- * rows, so none is open-world. EDIT covers writes that a second identical
- * call leaves unchanged; DESTROY the two that remove data.
+ * rows, so none is open-world. `destructiveHint: false` promises purely
+ * additive updates, which only the two creates keep: every other write
+ * overwrites or removes existing rows (an update can clear a deadline, a
+ * reschedule replaces planned dates, reopening a routine day deletes its
+ * record), and clients use the hint to decide whether to confirm first.
  */
 const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
-const EDIT = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
-const DESTROY = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
+const CHANGE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
 
 /**
  * Messages the data layer throws for conditions the model can act on. Only
@@ -208,7 +210,7 @@ export function registerTools(server: McpServer): void {
     "update_task",
     {
       title: "Update task",
-      annotations: EDIT,
+      annotations: CHANGE,
       description:
         "Change fields of a task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate.",
       inputSchema: updateTaskSchema.extend({ id: taskIdSchema }),
@@ -224,7 +226,7 @@ export function registerTools(server: McpServer): void {
     "complete_task",
     {
       title: "Complete task",
-      annotations: EDIT,
+      annotations: CHANGE,
       description: "Mark a task done.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
@@ -240,7 +242,7 @@ export function registerTools(server: McpServer): void {
     "uncomplete_task",
     {
       title: "Reopen task",
-      annotations: EDIT,
+      annotations: CHANGE,
       description:
         "Mark a completed task active again. Reopening a routine day removes that day's record instead of returning a task.",
       inputSchema: z.object({ id: taskIdSchema }),
@@ -256,7 +258,7 @@ export function registerTools(server: McpServer): void {
     "delete_task",
     {
       title: "Delete task",
-      annotations: DESTROY,
+      annotations: CHANGE,
       description: "Permanently delete a task.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
@@ -271,7 +273,7 @@ export function registerTools(server: McpServer): void {
     "bulk_reschedule",
     {
       title: "Reschedule tasks",
-      annotations: EDIT,
+      annotations: CHANGE,
       description:
         "Set the planned date of up to 100 tasks at once. Routine-day tasks are skipped.",
       inputSchema: z.object({ ids: idList, dueDate: dateStr }),
@@ -286,7 +288,7 @@ export function registerTools(server: McpServer): void {
     "bulk_complete",
     {
       title: "Complete tasks",
-      annotations: EDIT,
+      annotations: CHANGE,
       description: "Mark up to 100 tasks done at once.",
       inputSchema: z.object({ ids: idList }),
     },
@@ -298,7 +300,7 @@ export function registerTools(server: McpServer): void {
     "bulk_delete",
     {
       title: "Delete tasks",
-      annotations: DESTROY,
+      annotations: CHANGE,
       description: "Permanently delete up to 100 tasks at once.",
       inputSchema: z.object({ ids: idList }),
     },
