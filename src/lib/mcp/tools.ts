@@ -50,10 +50,20 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - Tasks live in projects; omit projectId to use the Inbox.
 - Routines are recurring templates. Their daily outcomes appear as tasks with a routineId; they are read-only through this server.
 - All dates are YYYY-MM-DD in the user's own timezone, which list_tasks reports as "today" and "timezone".
-- Propose changes in conversation; the write tools are the user's explicit accept.`;
+- Writes take effect immediately; the server keeps no drafts and has no undo.`;
 
 const WRITE_SCOPE = "tasks:write";
 const MAX_BULK_IDS = 100;
+
+/**
+ * Tool annotations (MCP spec). Every tool acts only on the caller's own
+ * rows, so none is open-world. EDIT covers writes that a second identical
+ * call leaves unchanged; DESTROY the two that remove data.
+ */
+const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
+const EDIT = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+const DESTROY = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
 
 /**
  * Messages the data layer throws for conditions the model can act on. Only
@@ -153,6 +163,7 @@ export function registerTools(server: McpServer): void {
     "list_tasks",
     {
       title: "List tasks",
+      annotations: READ,
       description:
         "Active tasks plus recently completed ones, with today's date and the user's timezone. Filter with status.",
       inputSchema: z.object({
@@ -182,6 +193,7 @@ export function registerTools(server: McpServer): void {
     "create_task",
     {
       title: "Create task",
+      annotations: ADD,
       description:
         "Create one task. dueDate is the planned day; deadline is the hard due date. Omit projectId for the Inbox.",
       inputSchema: createTaskSchema,
@@ -196,6 +208,7 @@ export function registerTools(server: McpServer): void {
     "update_task",
     {
       title: "Update task",
+      annotations: EDIT,
       description:
         "Change fields of a task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate.",
       inputSchema: updateTaskSchema.extend({ id: taskIdSchema }),
@@ -211,6 +224,7 @@ export function registerTools(server: McpServer): void {
     "complete_task",
     {
       title: "Complete task",
+      annotations: EDIT,
       description: "Mark a task done.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
@@ -226,6 +240,7 @@ export function registerTools(server: McpServer): void {
     "uncomplete_task",
     {
       title: "Reopen task",
+      annotations: EDIT,
       description:
         "Mark a completed task active again. Reopening a routine day removes that day's record instead of returning a task.",
       inputSchema: z.object({ id: taskIdSchema }),
@@ -241,6 +256,7 @@ export function registerTools(server: McpServer): void {
     "delete_task",
     {
       title: "Delete task",
+      annotations: DESTROY,
       description: "Permanently delete a task.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
@@ -255,6 +271,7 @@ export function registerTools(server: McpServer): void {
     "bulk_reschedule",
     {
       title: "Reschedule tasks",
+      annotations: EDIT,
       description:
         "Set the planned date of up to 100 tasks at once. Routine-day tasks are skipped.",
       inputSchema: z.object({ ids: idList, dueDate: dateStr }),
@@ -269,6 +286,7 @@ export function registerTools(server: McpServer): void {
     "bulk_complete",
     {
       title: "Complete tasks",
+      annotations: EDIT,
       description: "Mark up to 100 tasks done at once.",
       inputSchema: z.object({ ids: idList }),
     },
@@ -280,6 +298,7 @@ export function registerTools(server: McpServer): void {
     "bulk_delete",
     {
       title: "Delete tasks",
+      annotations: DESTROY,
       description: "Permanently delete up to 100 tasks at once.",
       inputSchema: z.object({ ids: idList }),
     },
@@ -291,6 +310,7 @@ export function registerTools(server: McpServer): void {
     "list_projects",
     {
       title: "List projects",
+      annotations: READ,
       description: "The user's projects, Inbox first.",
       inputSchema: z.object({}),
     },
@@ -301,6 +321,7 @@ export function registerTools(server: McpServer): void {
     "create_project",
     {
       title: "Create project",
+      annotations: ADD,
       description: "Create a project.",
       inputSchema: z.object({ name: projectNameSchema }),
     },
@@ -312,6 +333,7 @@ export function registerTools(server: McpServer): void {
     "list_routines",
     {
       title: "List routines",
+      annotations: READ,
       description:
         "Recurring templates with a readable cadence. Read-only here; edit routines in the app.",
       inputSchema: z.object({}),
@@ -329,6 +351,7 @@ export function registerTools(server: McpServer): void {
     "get_routine_history",
     {
       title: "Routine history",
+      annotations: READ,
       description:
         "Per-routine done/missed counts and day-by-day outcomes over a window ending today (default 84 days, max 371), or an explicit from/to range.",
       inputSchema: historySchema,

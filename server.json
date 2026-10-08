@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.g7xu/agentictodo",
+  "title": "agenticTODO",
+  "description": "A free todo list with no AI inside: tasks, projects and routines your coding agent can read and edit.",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://todo.g7xu.dev/api/mcp"
+    }
+  ]
+}
