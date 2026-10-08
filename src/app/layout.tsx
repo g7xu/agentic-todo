@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { issuer } from "@/lib/oauth/config";
 import { Providers } from "@/components/providers";
 import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -15,9 +16,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION =
+  "A free todo list with no AI inside. Your coding agent is the AI.";
+
 export const metadata: Metadata = {
-  title: "agenticTODO",
-  description: "A personal task manager that Claude can read and act on through MCP.",
+  // Absolute URLs for the Open Graph image and canonical links; `issuer()`
+  // is the one place the public URL is resolved.
+  metadataBase: new URL(issuer()),
+  title: { default: "agenticTODO", template: "%s · agenticTODO" },
+  description: DESCRIPTION,
+  applicationName: "agenticTODO",
+  appleWebApp: { capable: true, title: "agenticTODO", statusBarStyle: "default" },
+  openGraph: {
+    type: "website",
+    siteName: "agenticTODO",
+    title: "agenticTODO",
+    description: DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export default function RootLayout({

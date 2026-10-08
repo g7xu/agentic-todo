@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
+import { Landing } from "@/components/landing";
 
 export const dynamic = "force-dynamic";
 
-// `/` routes to the Upcoming board when signed in, otherwise to the sign-in page.
+// `/` is the landing page for visitors and the Upcoming board for users.
 export default async function Home() {
   const { data: session } = await auth.getSession();
-  redirect(session?.user ? "/upcoming" : "/auth/sign-in");
+  if (session?.user) redirect("/upcoming");
+  return <Landing />;
 }

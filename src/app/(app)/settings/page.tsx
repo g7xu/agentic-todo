@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   const apps = await listGrants(user.id);
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
+    <div className="mx-auto max-w-2xl p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">Settings</h1>
 
       <section className="grid gap-2">

@@ -31,7 +31,7 @@ export function ProjectTaskView({
     .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
+    <div className="mx-auto max-w-2xl p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">{title}</h1>
 
       <div className="overflow-hidden rounded-lg border">

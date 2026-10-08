@@ -8,7 +8,11 @@ export default function InboxPage() {
   const inbox = projects.find((p) => p.isInbox);
 
   if (!inbox) {
-    return <div className="mx-auto max-w-2xl p-6 text-muted-foreground">Loading…</div>;
+    return (
+      <div className="text-muted-foreground mx-auto max-w-2xl p-4 md:p-6">
+        Loading…
+      </div>
+    );
   }
   return <ProjectTaskView projectId={inbox.id} title="Inbox" />;
 }
