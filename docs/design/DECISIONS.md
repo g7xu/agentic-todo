@@ -1,7 +1,7 @@
 # Decisions — agenticTODO
 
-Decisions surfaced by the 10-round review/revise pass over [PRD.md](./PRD.md),
-[TDD.md](./TDD.md), [PROMPTS.md](./PROMPTS.md). Last updated: 2026-10-02 (D7 — the agent surface is a
+Decisions surfaced by the 10-round review/revise pass over the original PRD, [TDD.md](./TDD.md)
+and build prompts (the PRD and prompts have since been removed from the repo). Last updated: 2026-10-02 (D7 — the agent surface is a
 remote MCP server, spec in [MCP.md](../MCP.md)).
 
 Two kinds of entries:

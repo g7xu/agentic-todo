@@ -3,7 +3,7 @@
 **Owner:** Jason
 **Status:** Draft v1
 **Last updated:** 2026-06-28
-**Companion docs:** [PRD.md](./PRD.md) · [PROMPTS.md](./PROMPTS.md)
+**Companion docs:** [DECISIONS.md](./DECISIONS.md)
 
 ---
 

@@ -3,7 +3,7 @@
 **Owner:** Guoxuan Xu
 **Status:** Implemented 2026-10-02 (branch `feature/mcp-server`)
 **Last updated:** 2026-10-02
-Companion docs: [AGENT.md](./AGENT.md) · [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md)
+Companion docs: [AGENT.md](./AGENT.md) · [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md)
 
 ---
 

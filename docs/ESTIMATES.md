@@ -3,7 +3,7 @@
 **Owner:** Guoxuan Xu
 **Status:** Draft v1
 **Last updated:** 2026-07-26
-Companion docs: [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [PROMPTS.md](./design/PROMPTS.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md)
+Companion docs: [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md)
 
 ---
 

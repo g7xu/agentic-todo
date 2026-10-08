@@ -1,15 +1,15 @@
 # Agent direction — what the assistant is actually for
 
 **Owner:** Guoxuan Xu
-**Status:** Direction doc v1 — supersedes [TRIAGE.md](./design/TRIAGE.md) and [ROUTINES.md](./ROUTINES.md) §R3 *as next work*
+**Status:** Direction doc v1 — supersedes the earlier overdue-triage plan (since removed) and [ROUTINES.md](./ROUTINES.md) §R3 *as next work*
 **Last updated:** 2026-08-02
-Companion docs: [PRD.md](./design/PRD.md) · [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md) · [TRIAGE.md](./design/TRIAGE.md) · [ESTIMATES.md](./ESTIMATES.md)
+Companion docs: [TDD.md](./design/TDD.md) · [DECISIONS.md](./design/DECISIONS.md) · [ROUTINES.md](./ROUTINES.md) · [ESTIMATES.md](./ESTIMATES.md)
 
 ---
 
 ## 1. Why this doc exists
 
-Work on TRIAGE.md stopped mid-plan. The owner's words: *"the current challenge we have is that we
+Work on the overdue-triage plan stopped mid-plan. The owner's words: *"the current challenge we have is that we
 don't know what to do… these plans are not meaningful."* Rather than write a fifth build plan, we
 went and measured the problem. This doc records what the data said, what was decided, and what is
 still open — so the thread can be picked up cold weeks later without re-deriving it.
@@ -200,7 +200,7 @@ approval pause. Consistent with the original stack decision (no LangGraph).
 
 ## 7. Superseded and dropped
 
-- **TRIAGE.md T1–T4** — assumed an expensive overdue pile. There were five items and they were
+- **The overdue-triage plan (T1–T4)** — assumed an expensive overdue pile. There were five items and they were
   cleared by pushing three and deleting two. `pushCount` may return later as a signal; the digest
   violates AG2.
 - **ROUTINES.md §R3 as specified** — routine tools because a doc said so. `listRoutines` returns in

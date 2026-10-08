@@ -84,7 +84,7 @@ End-to-end and security suites, which need a running server, are described in
 
 - [docs/MCP.md](docs/MCP.md): MCP server and OAuth design, security checklist, deploy checklist
 - [docs/AGENT.md](docs/AGENT.md): what the agent is for
-- [docs/design/](docs/design/): the requirements, technical design and decision log the app was
+- [docs/design/](docs/design/): the technical design and decision log the app was
   built from, including [DECISIONS.md](docs/design/DECISIONS.md)
 
 Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
