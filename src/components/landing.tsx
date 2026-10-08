@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { REPO_URL } from "@/lib/legal";
 import { resourceUrl } from "@/lib/oauth/config";
 import screenshot from "../../public/screenshot-upcoming.png";
 
@@ -156,7 +157,11 @@ export function Landing() {
             <h3 className="font-medium">Open source</h3>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
               MIT-licensed, built by one engineer who wanted a todo list that
-              lives where the work happens.
+              lives where the work happens.{" "}
+              <a href={REPO_URL} className="text-foreground underline underline-offset-2">
+                Read the source on GitHub
+              </a>
+              , or run your own copy.
             </p>
           </div>
         </div>
@@ -165,6 +170,7 @@ export function Landing() {
       <footer className="text-muted-foreground flex flex-wrap items-center justify-between gap-3 border-t py-8 text-sm">
         <span>© 2026 Guoxuan Xu</span>
         <nav className="flex gap-4">
+          <a href={REPO_URL} className="hover:text-foreground">GitHub</a>
           <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
           <Link href="/terms" className="hover:text-foreground">Terms</Link>
           <Link href="/support" className="hover:text-foreground">Support</Link>
