@@ -21,12 +21,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DeleteProjectDialog } from "@/components/delete-project-dialog";
 import {
   useCreateProject,
-  useDeleteProject,
   useProjects,
   useRenameProject,
 } from "@/hooks/use-projects";
+import type { ProjectDTO } from "@/lib/types";
 
 const NAV = [
   { href: "/inbox", label: "Inbox", icon: Inbox },
@@ -52,12 +53,12 @@ export function AppSidebar({
   const { data: projects = [] } = useProjects();
   const createProject = useCreateProject();
   const renameProject = useRenameProject();
-  const deleteProject = useDeleteProject();
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [deleting, setDeleting] = useState<ProjectDTO | null>(null);
 
   const userProjects = projects.filter((p) => !p.isInbox);
 
@@ -184,7 +185,7 @@ export function AppSidebar({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
-                  onClick={() => deleteProject.mutate(p.id)}
+                  onClick={() => setDeleting(p)}
                 >
                   <Trash2 className="size-4" /> Delete
                 </DropdownMenuItem>
@@ -193,6 +194,16 @@ export function AppSidebar({
           </div>
         );
       })}
+
+      {deleting && (
+        <DeleteProjectDialog
+          project={deleting}
+          open={!!deleting}
+          onOpenChange={(open) => {
+            if (!open) setDeleting(null);
+          }}
+        />
+      )}
     </nav>
   );
 }
