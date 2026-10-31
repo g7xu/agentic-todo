@@ -78,6 +78,7 @@ const EXPECTED_DATA_ERRORS = new Set([
   "Routine not found",
   "Routine tasks can't change project",
   "Routine tasks can't be rescheduled",
+  "Missed routine days can't be completed",
   "The Inbox project cannot be deleted",
 ]);
 

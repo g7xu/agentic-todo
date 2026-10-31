@@ -247,6 +247,18 @@ export async function updateTask(
  * back to 'active' — the board would show the stored task AND the card for
  * the same day. The row is removed when its day is still ahead, which brings
  * the card back, and marked missed when its day has passed.
+ *
+ * Completing only ever moves a task out of 'active':
+ *  - a task already completed is returned untouched, so `completedAt` keeps
+ *    the moment the work was first done. Restamping it would move old work
+ *    into whichever week it happened to be ticked again.
+ *  - a 'missed' row is refused. It is a routine day's recorded outcome, not
+ *    pending work, and making up a past day belongs to `setRoutineDay`
+ *    (docs/ROUTINES.md §RV9), which validates the day and can restore an
+ *    earlier completion time. Completing it here would stamp the present and
+ *    record every such day as made up.
+ *
+ * `bulkComplete` follows the same rules.
  */
 export async function setTaskStatus(
   userId: string,
@@ -255,9 +267,16 @@ export async function setTaskStatus(
 ): Promise<TaskDTO | null> {
   const existing = await prisma.task.findFirst({
     where: { id, userId },
-    select: { id: true, routineId: true, dueDate: true },
+    select: SELECT,
   });
   if (!existing) throw new Error("Task not found");
+
+  if (status === "completed") {
+    if (existing.status === "completed") return toDTO(existing);
+    if (existing.status === "missed") {
+      throw new Error("Missed routine days can't be completed");
+    }
+  }
 
   if (status === "active" && existing.routineId) {
     const profile = await prisma.profile.findUnique({
@@ -354,18 +373,31 @@ export async function bulkReschedule(
   return { applied: movable, skipped, tasksChanged: movable.length > 0 };
 }
 
+/** Completion rules are `setTaskStatus`'s. An already-completed task counts as
+ * applied but is not written; a 'missed' row is skipped rather than thrown on. */
 export async function bulkComplete(
   userId: string,
   ids: string[],
 ): Promise<BulkResult> {
   const { owned, skipped } = await partitionOwned(userId, ids);
-  await prisma.$transaction([
+  const missedRows = await prisma.task.findMany({
+    where: { id: { in: owned }, userId, status: "missed" },
+    select: { id: true },
+  });
+  const missedIds = new Set(missedRows.map((r) => r.id));
+  const applied = owned.filter((id) => !missedIds.has(id));
+  skipped.push(
+    ...owned
+      .filter((id) => missedIds.has(id))
+      .map((id) => ({ id, reason: "routine_day_missed" })),
+  );
+  const [written] = await prisma.$transaction([
     prisma.task.updateMany({
-      where: { id: { in: owned }, userId },
+      where: { id: { in: applied }, userId, status: "active" },
       data: { status: "completed", completedAt: new Date() },
     }),
   ]);
-  return { applied: owned, skipped, tasksChanged: owned.length > 0 };
+  return { applied, skipped, tasksChanged: written.count > 0 };
 }
 
 export async function bulkDelete(
