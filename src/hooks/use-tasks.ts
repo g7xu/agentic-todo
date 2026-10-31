@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { TaskDTO } from "@/lib/types";
+import type { Accuracy } from "@/lib/estimate-accuracy";
 import {
   completeTaskAction,
   createTaskAction,
@@ -212,5 +213,25 @@ export function useDeleteTask() {
       if (ctx?.prev) qc.setQueryData(TASKS_KEY, ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: TASKS_KEY }),
+  });
+}
+
+export type EstimateVsActual = { from: string; to: string } & Accuracy;
+
+/**
+ * Estimate vs. actual for the Activity page (docs/ESTIMATE-VS-ACTUAL.md).
+ * Keyed under TASKS_KEY so every task, routine and project write that
+ * invalidates the task list refreshes it too; `patch` never touches it because
+ * `setQueryData` matches the exact key only.
+ */
+export function useEstimateVsActual(days: number) {
+  return useQuery({
+    queryKey: [...TASKS_KEY, "estimate-vs-actual", days] as const,
+    queryFn: async (): Promise<EstimateVsActual> => {
+      const res = await fetch(`/api/activity/estimate-vs-actual?days=${days}`);
+      if (!res.ok) throw new Error("Failed to load estimate vs. actual");
+      return res.json();
+    },
+    refetchOnWindowFocus: "always",
   });
 }
