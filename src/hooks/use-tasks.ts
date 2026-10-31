@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { TaskDTO } from "@/lib/types";
-import type { TimeShare } from "@/lib/time-share";
+import type { Accuracy } from "@/lib/estimate-accuracy";
 import {
   completeTaskAction,
   createTaskAction,
@@ -216,20 +216,20 @@ export function useDeleteTask() {
   });
 }
 
-export type TimeByProject = { from: string; to: string } & TimeShare;
+export type EstimateVsActual = { from: string; to: string } & Accuracy;
 
 /**
- * Finished work by project for the Activity page (docs/TIME-BY-PROJECT.md).
+ * Estimate vs. actual for the Activity page (docs/ESTIMATE-VS-ACTUAL.md).
  * Keyed under TASKS_KEY so every task, routine and project write that
  * invalidates the task list refreshes it too; `patch` never touches it because
  * `setQueryData` matches the exact key only.
  */
-export function useTimeByProject(days: number) {
+export function useEstimateVsActual(days: number) {
   return useQuery({
-    queryKey: [...TASKS_KEY, "time-by-project", days] as const,
-    queryFn: async (): Promise<TimeByProject> => {
-      const res = await fetch(`/api/activity/time-by-project?days=${days}`);
-      if (!res.ok) throw new Error("Failed to load time by project");
+    queryKey: [...TASKS_KEY, "estimate-vs-actual", days] as const,
+    queryFn: async (): Promise<EstimateVsActual> => {
+      const res = await fetch(`/api/activity/estimate-vs-actual?days=${days}`);
+      if (!res.ok) throw new Error("Failed to load estimate vs. actual");
       return res.json();
     },
     refetchOnWindowFocus: "always",

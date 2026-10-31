@@ -159,9 +159,9 @@ conflict with these, **these win** (kept for history rather than rewritten):
   Today renders as `not due` rather than `no record`: its instance is still open, and writing it
   off mid-morning would be a lie. The grid opens scrolled to the most recent day.
 
-  Since 2026-10-30 `/activity` also carries a time-by-project section above the grid — the
-  cross-project view of finished work this decision gave up, by project rather than as a list
-  ([TIME-BY-PROJECT.md](./TIME-BY-PROJECT.md)). Same read-only rule: its route records nothing.
+  Since 2026-10-31 `/activity` also carries an estimate-vs-actual section above the grid,
+  comparing finished work's estimated and logged hours per project
+  ([ESTIMATE-VS-ACTUAL.md](./ESTIMATE-VS-ACTUAL.md)). Same read-only rule: its route records nothing.
 
 - **RV7 — A missed day is recorded, and the work becomes a replannable task (2026-07-18).**
   **Half superseded by RV10 (2026-08-02): the `missed` record stays, the catch-up task is gone.**

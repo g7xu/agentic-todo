@@ -458,9 +458,9 @@ export type UpdateRoutineInput = {
 /**
  * Edits the template. Recorded days keep the values they were written with,
  * with one exception: a routine and its recorded days always share a project,
- * so moving the routine moves its history too (docs/TIME-BY-PROJECT.md DT4).
+ * so moving the routine moves its history too (docs/ESTIMATE-VS-ACTUAL.md EA4).
  * That is what keeps a routine's days in one place on the project view and in
- * one row of time by project, since `updateTask` refuses to move them singly.
+ * one row of estimate vs. actual, since `updateTask` refuses to move them singly.
  */
 export async function updateRoutine(
   userId: string,

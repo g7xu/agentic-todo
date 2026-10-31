@@ -1,24 +1,24 @@
 import { prisma } from "@/lib/db";
 import { addDays, toDbDate } from "@/lib/date";
-import { summarizeTimeByProject, type TimeShare } from "@/lib/time-share";
+import { summarizeAccuracy, type Accuracy } from "@/lib/estimate-accuracy";
 
 /**
- * Completed work in `from..to` (user-local days, inclusive) grouped by project.
+ * Estimate vs. actual for `from..to` (user-local days, inclusive), per project.
  * Reads only: unlike `listTasks` this records nothing (docs/ROUTINES.md §RV8)
  * and has no row cap, since a year of completions is a few thousand narrow rows.
  *
- * The day a row counts on is decided in `summarizeTimeByProject`, after
- * conversion to the user's timezone. The query only has to be wide enough
- * never to miss one: a day's completions can be stamped up to 14 hours before
- * its UTC midnight (UTC+14) or 12 hours after the next (UTC−12), so one extra
- * calendar day on either side covers every timezone.
+ * The day a row counts on is decided in `summarizeAccuracy`, after conversion
+ * to the user's timezone. The query only has to be wide enough never to miss
+ * one: a day's completions can be stamped up to 14 hours before its UTC
+ * midnight (UTC+14) or 12 hours after the next (UTC−12), so one extra calendar
+ * day on either side covers every timezone.
  */
-export async function getTimeByProject(
+export async function getEstimateAccuracy(
   userId: string,
   from: string,
   to: string,
   tz: string,
-): Promise<TimeShare> {
+): Promise<Accuracy> {
   const lower = toDbDate(addDays(from, -1));
   const upper = toDbDate(addDays(to, 2));
   const rows = await prisma.task.findMany({
@@ -31,6 +31,8 @@ export async function getTimeByProject(
       ],
     },
     select: {
+      id: true,
+      content: true,
       projectId: true,
       routineId: true,
       estimate: true,
@@ -39,5 +41,5 @@ export async function getTimeByProject(
       completedAt: true,
     },
   });
-  return summarizeTimeByProject(rows, from, to, tz);
+  return summarizeAccuracy(rows, from, to, tz);
 }
