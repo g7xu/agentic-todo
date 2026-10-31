@@ -227,6 +227,8 @@ async function sectionA() {
     "/api/routines/history?days=999999",
     "/api/routines/history?days=-1",
     "/api/routines/history?days=abc",
+    "/api/activity/time-by-project",
+    "/api/activity/time-by-project?days=999999",
     "/api/tasks?" + "q=" + "a".repeat(100 * 1024),
   ];
   const apiResults: Record<string, string> = {};
@@ -266,7 +268,7 @@ async function sectionA() {
   // HTTP methods on the JSON routes without a session.
   const methodResults: Record<string, string> = {};
   let method5xx = false;
-  for (const p of ["/api/tasks", "/api/projects", "/api/routines", "/api/routines/history"]) {
+  for (const p of ["/api/tasks", "/api/projects", "/api/routines", "/api/routines/history", "/api/activity/time-by-project"]) {
     for (const m of ["POST", "PUT", "PATCH", "DELETE"]) {
       const r = await http(p, { method: m, headers: { "Content-Type": "application/json", Accept: "application/json" }, body: "{}" });
       methodResults[`${m} ${p}`] = String(r.status);

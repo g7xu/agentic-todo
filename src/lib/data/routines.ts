@@ -455,8 +455,13 @@ export type UpdateRoutineInput = {
   active?: boolean;
 };
 
-/** Edits the template only — recorded outcomes keep the values they were
- * written with. */
+/**
+ * Edits the template. Recorded days keep the values they were written with,
+ * with one exception: a routine and its recorded days always share a project,
+ * so moving the routine moves its history too (docs/TIME-BY-PROJECT.md DT4).
+ * That is what keeps a routine's days in one place on the project view and in
+ * one row of time by project, since `updateTask` refuses to move them singly.
+ */
 export async function updateRoutine(
   userId: string,
   id: string,
@@ -524,7 +529,20 @@ export async function updateRoutine(
     await recordMissedDays(userId, todayStr(await timezoneOf(userId)));
   }
 
-  const r = await prisma.routine.update({ where: { id }, data, select: SELECT });
+  const r = await prisma.$transaction(async (tx) => {
+    const updated = await tx.routine.update({
+      where: { id },
+      data,
+      select: SELECT,
+    });
+    if (input.projectId !== undefined) {
+      await tx.task.updateMany({
+        where: { userId, routineId: id },
+        data: { projectId: input.projectId },
+      });
+    }
+    return updated;
+  });
   const last =
     baseOf(r) === "completed"
       ? await lastCompletionDays(userId, [r.id], await timezoneOf(userId))

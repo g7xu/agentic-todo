@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { TaskDTO } from "@/lib/types";
+import type { TimeShare } from "@/lib/time-share";
 import {
   completeTaskAction,
   createTaskAction,
@@ -212,5 +213,25 @@ export function useDeleteTask() {
       if (ctx?.prev) qc.setQueryData(TASKS_KEY, ctx.prev);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: TASKS_KEY }),
+  });
+}
+
+export type TimeByProject = { from: string; to: string } & TimeShare;
+
+/**
+ * Finished work by project for the Activity page (docs/TIME-BY-PROJECT.md).
+ * Keyed under TASKS_KEY so every task, routine and project write that
+ * invalidates the task list refreshes it too; `patch` never touches it because
+ * `setQueryData` matches the exact key only.
+ */
+export function useTimeByProject(days: number) {
+  return useQuery({
+    queryKey: [...TASKS_KEY, "time-by-project", days] as const,
+    queryFn: async (): Promise<TimeByProject> => {
+      const res = await fetch(`/api/activity/time-by-project?days=${days}`);
+      if (!res.ok) throw new Error("Failed to load time by project");
+      return res.json();
+    },
+    refetchOnWindowFocus: "always",
   });
 }

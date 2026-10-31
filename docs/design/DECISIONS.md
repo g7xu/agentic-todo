@@ -1,19 +1,26 @@
 # Decisions — agenticTODO
 
 Decisions surfaced by the 10-round review/revise pass over the original PRD, [TDD.md](./TDD.md)
-and build prompts (the PRD and prompts have since been removed from the repo). Last updated: 2026-10-02 (D7 — the agent surface is a
-remote MCP server, spec in [MCP.md](../MCP.md)).
+and build prompts (the PRD and prompts have since been removed from the repo). Last updated: 2026-10-30 (D8 — time by project on `/activity`, spec in
+[TIME-BY-PROJECT.md](../TIME-BY-PROJECT.md)).
 
 Two kinds of entries:
 - ✅ **Provisionally resolved** — the docs already chose a default and wrote it in. Listed so you can
   veto. If you're happy, no action.
-- **Owner-decided (D1–D7)** — the product trade-offs that were left open are now answered
-  (2026-06-28; D6 the backend-stack switch on 2026-06-29; D7 the MCP surface on 2026-10-02) and
+- **Owner-decided (D1–D8)** — the product trade-offs that were left open are now answered
+  (2026-06-28; D6 the backend-stack switch on 2026-06-29; D7 the MCP surface on 2026-10-02; D8 time by
+  project on 2026-10-30) and
   folded into the docs. Recorded below with the chosen option for each.
 
 ---
 
 ## Resolved (owner-decided 2026-06-28)
+
+### D8 — Time by project groups finished work by project; no labels field (decided 2026-10-30)
+Projects are the one grouping every task and routine already has, so `/activity` reports finished
+time per project rather than introducing tags. Full spec and the counting rules in
+[TIME-BY-PROJECT.md](../TIME-BY-PROJECT.md) (DT1–DT5). The one data-model consequence: a routine
+and its recorded days now always share a project — moving the routine moves its history (DT4).
 
 ### D7 — Agent surface: remote MCP server with an in-app OAuth 2.1 authorization server (decided 2026-10-02)
 The agent surface is a **remote MCP server at `/api/mcp`**, not an in-app chat (removed in PR #31)
