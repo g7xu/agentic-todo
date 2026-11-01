@@ -5,12 +5,14 @@ import Link from "next/link";
 import {
   closestCorners,
   DndContext,
+  pointerWithin,
   DragOverlay,
   MouseSensor,
   TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -64,6 +66,17 @@ export const KIND_META: Record<NoteKind, { label: string; caption: string; dot: 
 };
 
 type Items = Record<NoteKind, string[]>;
+
+/**
+ * The drop target is whatever is under the pointer; nearest corners only
+ * decide when the pointer is over nothing. Corners alone fail for the pile:
+ * it is a wide, short strip whose corners sit far out at its ends, so a
+ * neighbouring column almost always measured closer.
+ */
+const pointerFirst: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCorners(args);
+};
 
 const emptyItems = (): Items => ({ unsorted: [], thorn: [], rose: [], seed: [], action: [] });
 
@@ -540,7 +553,7 @@ export function ReviewBoard({ week }: { week: string }) {
       <div className="flex flex-col-reverse gap-6 2xl:flex-row 2xl:items-start">
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={pointerFirst}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
