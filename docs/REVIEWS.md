@@ -18,9 +18,10 @@ A weekly review (周复盘) board, one per week, in four columns:
 | Seed | worth trying |
 | Action | what to do next |
 
-Beside the board, "Done this week" lists the one-off tasks completed that week. A review is a look
-back at finished work, and that work already lives in this app. Closing the week turns up to three
-Action notes into ordinary tasks for the following week.
+Above the columns sits an unsorted pile for thoughts jotted down as they happen, before deciding
+which column they belong in. Beside the board, "Done this week" lists the one-off tasks completed
+that week. A review is a look back at finished work, and that work already lives in this app.
+Closing the week turns up to three Action notes into ordinary tasks for the following week.
 
 The board replaces a separate app, personal-swiftboard, which had the same four columns and the
 same carry-three rule. Nothing was migrated from it.
@@ -43,7 +44,11 @@ same carry-three rule. Nothing was migrated from it.
 - **DR6 — Evidence is completed one-off tasks.** Routine days are left out: the Activity grid
   already shows them, and a week of daily routines would bury the one-offs. A task counts on the
   local day it was completed.
-- **DR7 — No AI in the app.** The board is written by hand. MCP review tools can later wrap the
+- **DR7 — Leftover unsorted notes move forward on close.** They join the pile of the next week
+  that is still open, after anything already there, creating that week's review if needed. Closing
+  never waits on sorting and never drops a thought. A closed following week is skipped, since
+  notes parked there could not be edited.
+- **DR8 — No AI in the app.** The board is written by hand. MCP review tools can later wrap the
   same data functions (AGENT.md AG4).
 
 ## 2. Reference
@@ -51,6 +56,7 @@ same carry-three rule. Nothing was migrated from it.
 | Piece | Where |
 |---|---|
 | Tables | `reviews` (unique per user and week), `review_notes` |
+| Note kinds | `unsorted`, `thorn`, `rose`, `seed`, `action` |
 | Data functions | `src/lib/data/reviews.ts` |
 | Server actions | `src/app/actions/reviews.ts` |
 | Reads | `GET /api/reviews`, `GET /api/reviews/{week}` |
@@ -61,5 +67,6 @@ Account export includes reviews with their notes. Account deletion removes them.
 ## 3. Not built
 
 - Reopening a closed week.
+- Capturing an unsorted note from outside the board, such as from the header or over MCP.
 - MCP tools for reading or drafting a review.
 - Routine results and pushed-task signals in the evidence panel.

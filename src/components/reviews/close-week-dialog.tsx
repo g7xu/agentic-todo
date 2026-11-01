@@ -32,11 +32,14 @@ function shortDay(day: string): string {
 export function CloseWeekDialog({
   week,
   actions,
+  unsortedCount,
   open,
   onOpenChange,
 }: {
   week: string;
   actions: ReviewNoteDTO[];
+  /** Notes still in the pile; closing moves them to next week's pile. */
+  unsortedCount: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -70,10 +73,13 @@ export function CloseWeekDialog({
           <DialogTitle>Close the week</DialogTitle>
           <DialogDescription>
             {actions.length === 0
-              ? "There are no actions to carry. The board becomes read-only."
+              ? "There are no actions to carry."
               : `Pick up to ${MAX_CARRIED} actions. Each becomes an Inbox task for ${shortDay(
                   addDays(week, 7),
-                )}. The board becomes read-only.`}
+                )}.`}
+            {unsortedCount > 0 &&
+              ` ${unsortedCount} unsorted ${unsortedCount === 1 ? "note moves" : "notes move"} to the next open week’s pile.`}
+            {" The board becomes read-only."}
           </DialogDescription>
         </DialogHeader>
         {actions.length > 0 && (

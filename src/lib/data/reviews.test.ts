@@ -91,6 +91,8 @@ const db = vi.hoisted(() => {
         notes.push(row);
         return { ...row };
       },
+      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+        notes.filter((n) => matches(n, where)).sort(byOrder).map((n) => ({ ...n })),
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         const n = notes.find((x) => matches(x, where));
         if (!n) return null;
@@ -233,6 +235,50 @@ describe("closeReview", () => {
   });
 });
 
+describe("closeReview and the unsorted pile", () => {
+  const NEXT = "2026-11-01";
+  const notesIn = async (week: string, kind: string) =>
+    (await getReview(USER, week))?.notes.filter((n) => n.kind === kind).map((n) => n.content) ?? [];
+
+  it("moves unsorted notes to next week's pile, after anything already there", async () => {
+    await addNote(USER, WEEK, { kind: "unsorted", content: "half a thought" });
+    await addNote(USER, WEEK, { kind: "unsorted", content: "another" });
+    await addNote(USER, NEXT, { kind: "unsorted", content: "already next week" });
+
+    const closed = await closeReview(USER, WEEK, []);
+
+    expect(closed.notes.filter((n) => n.kind === "unsorted")).toEqual([]);
+    expect(await notesIn(NEXT, "unsorted")).toEqual([
+      "already next week",
+      "half a thought",
+      "another",
+    ]);
+  });
+
+  it("creates next week's review when it has none yet", async () => {
+    await addNote(USER, WEEK, { kind: "unsorted", content: "keep me" });
+    await closeReview(USER, WEEK, []);
+    expect(await notesIn(NEXT, "unsorted")).toEqual(["keep me"]);
+  });
+
+  it("skips a following week that is already closed", async () => {
+    await addNote(USER, NEXT, { kind: "rose", content: "next week done" });
+    await closeReview(USER, NEXT, []);
+    await addNote(USER, WEEK, { kind: "unsorted", content: "late thought" });
+
+    await closeReview(USER, WEEK, []);
+
+    expect(await notesIn(NEXT, "unsorted")).toEqual([]);
+    expect(await notesIn("2026-11-08", "unsorted")).toEqual(["late thought"]);
+  });
+
+  it("creates nothing for the next week when the pile is empty", async () => {
+    await addNote(USER, WEEK, { kind: "rose", content: "only this" });
+    await closeReview(USER, WEEK, []);
+    expect(db.reviews).toHaveLength(1);
+  });
+});
+
 describe("listReviews", () => {
   it("counts notes per column, newest week first", async () => {
     await addNote(USER, "2026-10-18", { kind: "thorn", content: "x" });
@@ -242,7 +288,7 @@ describe("listReviews", () => {
 
     const list = await listReviews(USER);
     expect(list.map((r) => r.weekStart)).toEqual([WEEK, "2026-10-18"]);
-    expect(list[0].counts).toEqual({ thorn: 0, rose: 2, seed: 0, action: 0 });
+    expect(list[0].counts).toEqual({ unsorted: 0, thorn: 0, rose: 2, seed: 0, action: 0 });
   });
 });
 

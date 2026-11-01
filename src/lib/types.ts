@@ -76,8 +76,9 @@ export type ConnectedAppDTO = {
   lastUsedAt: string | null; // ISO
 };
 
-/** A note's column on a weekly review board (docs/REVIEWS.md). */
-export type NoteKind = "thorn" | "rose" | "seed" | "action";
+/** Where a note sits on a weekly review board (docs/REVIEWS.md):
+ * the unsorted pile or one of the four columns. */
+export type NoteKind = "unsorted" | "thorn" | "rose" | "seed" | "action";
 
 export type ReviewNoteDTO = {
   id: string;

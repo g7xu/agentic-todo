@@ -204,8 +204,10 @@ export async function deleteNote(userId: string, id: string): Promise<void> {
 /**
  * Closes the week. Each chosen action note becomes an ordinary Inbox task
  * planned for the next week's Sunday, and the note records which task it
- * became. Everything happens in one transaction, so a failure leaves the week
- * open with no tasks created.
+ * became. Notes still in the unsorted pile move to the pile of the next week
+ * that is open, so closing never loses a thought and never waits on sorting.
+ * Everything happens in one transaction, so a failure leaves the week open
+ * with no tasks created and no notes moved.
  */
 export async function closeReview(
   userId: string,
@@ -254,6 +256,38 @@ export async function closeReview(
         data: { carriedTaskId: task.id },
       });
     }
+    const unsorted = await tx.reviewNote.findMany({
+      where: { reviewId: review.id, kind: "unsorted" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    if (unsorted.length > 0) {
+      // Skip weeks already closed: notes parked there could never be edited.
+      const select = { id: true, closedAt: true } as const;
+      let target = addDays(week, 7);
+      let next = await tx.review.findUnique({ where: weekKey(userId, target), select });
+      while (next?.closedAt) {
+        target = addDays(target, 7);
+        next = await tx.review.findUnique({ where: weekKey(userId, target), select });
+      }
+      next ??= await tx.review.create({
+        data: { userId, weekStart: toDbDate(target) },
+        select,
+      });
+      const maxNext = await tx.reviewNote.aggregate({
+        where: { reviewId: next.id, kind: "unsorted" },
+        _max: { order: true },
+      });
+      let pileOrder = maxNext._max.order ?? 0;
+      for (const n of unsorted) {
+        pileOrder += 1;
+        await tx.reviewNote.update({
+          where: { id: n.id },
+          data: { reviewId: next.id, order: pileOrder },
+        });
+      }
+    }
+
     await tx.review.update({
       where: { id: review.id },
       data: { closedAt: new Date() },

@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import {
   arrayMove,
+  rectSortingStrategy,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -33,7 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { addDays } from "@/lib/date";
-import { NOTE_KINDS, weekLabel } from "@/lib/reviews";
+import { BOARD_COLUMNS, NOTE_KINDS, weekLabel } from "@/lib/reviews";
 import {
   useAddNote,
   useDeleteNote,
@@ -55,6 +56,7 @@ import { DoneThisWeek } from "@/components/reviews/done-this-week";
 import type { NoteKind, ReviewNoteDTO } from "@/lib/types";
 
 export const KIND_META: Record<NoteKind, { label: string; caption: string; dot: string }> = {
+  unsorted: { label: "Unsorted", caption: "jot it now, sort it later", dot: "bg-muted-foreground" },
   thorn: { label: "Thorn", caption: "what stung", dot: "bg-red-500" },
   rose: { label: "Rose", caption: "what went well", dot: "bg-green-600" },
   seed: { label: "Seed", caption: "worth trying", dot: "bg-amber-500" },
@@ -62,6 +64,8 @@ export const KIND_META: Record<NoteKind, { label: string; caption: string; dot: 
 };
 
 type Items = Record<NoteKind, string[]>;
+
+const emptyItems = (): Items => ({ unsorted: [], thorn: [], rose: [], seed: [], action: [] });
 
 /** Stamped on every drag end so the browser's trailing click after a drop
  * does not open the note for editing (same guard as the Upcoming board). */
@@ -305,11 +309,86 @@ function Column({
   );
 }
 
+/**
+ * The unsorted pile: thoughts written down as they happen, before deciding
+ * which column they belong in. The input stays open so several can be jotted
+ * in a row; dragging a note into a column sorts it.
+ */
+function UnsortedPile({
+  ids,
+  noteById,
+  week,
+}: {
+  ids: string[];
+  noteById: Map<string, ReviewNoteDTO>;
+  week: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: "unsorted" });
+  const add = useAddNote(week);
+  const [text, setText] = useState("");
+  const meta = KIND_META.unsorted;
+  function submit() {
+    const content = text.trim();
+    if (!content) return;
+    add.mutate({ kind: "unsorted", content });
+    setText("");
+  }
+  return (
+    <section>
+      <div className="flex items-baseline gap-2 px-1 pb-2">
+        <span className="text-sm font-medium">
+          {meta.label}
+          <span className="text-muted-foreground ml-1.5 font-normal tabular-nums">
+            {ids.length || ""}
+          </span>
+        </span>
+        <span className="text-muted-foreground text-xs">{meta.caption}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "bg-muted/30 flex flex-col gap-2 rounded-lg border p-2",
+          isOver && "ring-primary/40 ring-2",
+        )}
+      >
+        <input
+          value={text}
+          maxLength={500}
+          placeholder="A thought, a worry, an idea… press Enter"
+          aria-label="Add an unsorted note"
+          className="bg-card placeholder:text-muted-foreground focus-visible:ring-ring/50 w-full rounded-md border px-2 py-1.5 text-sm outline-none focus-visible:ring-3"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        {ids.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <SortableContext items={ids} strategy={rectSortingStrategy}>
+              {ids.map((id) => {
+                const note = noteById.get(id);
+                return note ? (
+                  <div key={id} className="w-56">
+                    <SortableNote note={note} week={week} readOnly={false} />
+                  </div>
+                ) : null;
+              })}
+            </SortableContext>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function ReviewBoard({ week }: { week: string }) {
   const { data, isLoading, isError, refetch } = useReviewWeek(week);
   const { data: projects = [] } = useProjects();
   const move = useMoveNote(week);
-  const [items, setItems] = useState<Items>({ thorn: [], rose: [], seed: [], action: [] });
+  const [items, setItems] = useState<Items>(emptyItems);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
 
@@ -317,7 +396,7 @@ export function ReviewBoard({ week }: { week: string }) {
   const noteById = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
 
   const serverItems = useMemo<Items>(() => {
-    const cols: Items = { thorn: [], rose: [], seed: [], action: [] };
+    const cols: Items = emptyItems();
     const sorted = [...notes].sort(
       (a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt),
     );
@@ -470,17 +549,20 @@ export function ReviewBoard({ week }: { week: string }) {
             setActiveId(null);
           }}
         >
-          <div className="flex min-w-0 items-start gap-4 overflow-x-auto pb-4 2xl:flex-1">
-            {NOTE_KINDS.map((kind) => (
-              <Column
-                key={kind}
-                kind={kind}
-                ids={view[kind]}
-                noteById={noteById}
-                week={week}
-                readOnly={closed}
-              />
-            ))}
+          <div className="flex min-w-0 flex-col gap-4 2xl:flex-1">
+            {!closed && <UnsortedPile ids={view.unsorted} noteById={noteById} week={week} />}
+            <div className="flex min-w-0 items-start gap-4 overflow-x-auto pb-4">
+              {BOARD_COLUMNS.map((kind) => (
+                <Column
+                  key={kind}
+                  kind={kind}
+                  ids={view[kind]}
+                  noteById={noteById}
+                  week={week}
+                  readOnly={closed}
+                />
+              ))}
+            </div>
           </div>
           <DragOverlay dropAnimation={null}>
             {activeNote ? <NoteCard note={activeNote} readOnly={false} dragging /> : null}
@@ -493,6 +575,7 @@ export function ReviewBoard({ week }: { week: string }) {
         <CloseWeekDialog
           week={week}
           actions={review.notes.filter((n) => n.kind === "action")}
+          unsortedCount={review.notes.filter((n) => n.kind === "unsorted").length}
           open={closing}
           onOpenChange={setClosing}
         />

@@ -2,7 +2,10 @@ import { startOfWeek } from "@/lib/date";
 import type { NoteKind } from "@/lib/types";
 
 /** Board columns, left to right. */
-export const NOTE_KINDS = ["thorn", "rose", "seed", "action"] as const satisfies readonly NoteKind[];
+export const BOARD_COLUMNS = ["thorn", "rose", "seed", "action"] as const satisfies readonly NoteKind[];
+
+/** Every place a note can sit: the unsorted pile, then the columns. */
+export const NOTE_KINDS = ["unsorted", ...BOARD_COLUMNS] as const satisfies readonly NoteKind[];
 
 /** Closing a week carries at most this many action notes into tasks. */
 export const MAX_CARRIED = 3;
