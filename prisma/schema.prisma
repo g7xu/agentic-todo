@@ -30,6 +30,8 @@ model Profile {
   tasks         Task[]
   routines      Routine[]
   dayCapacities DayCapacity[]
+  reviews       Review[]
+  reviewNotes   ReviewNote[]
 
   @@map("profiles")
 }
@@ -93,9 +95,10 @@ model Task {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6) /// maintained by Prisma, no DB trigger
 
-  user    Profile  @relation(fields: [userId], references: [id])
-  project Project  @relation(fields: [projectId], references: [id])
-  routine Routine? @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
+  user        Profile      @relation(fields: [userId], references: [id])
+  project     Project      @relation(fields: [projectId], references: [id])
+  routine     Routine?     @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
+  reviewNotes ReviewNote[] /// review actions this task was carried from (docs/REVIEWS.md)
 
   // Idempotency guard for routine materialization: at most one instance per
   // routine per day. NULLs are distinct in Postgres, so ordinary tasks
@@ -104,6 +107,43 @@ model Task {
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
   @@map("tasks")
+}
+
+/// One weekly review (docs/REVIEWS.md). The row is created with the week's
+/// first note, so a week nobody wrote in has no row at all.
+model Review {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  weekStart DateTime  @map("week_start") @db.Date /// the Sunday that starts the week, user-local
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz(6) /// null = open; a closed week is read-only
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  Profile      @relation(fields: [userId], references: [id])
+  notes ReviewNote[]
+
+  @@unique([userId, weekStart])
+  @@map("reviews")
+}
+
+model ReviewNote {
+  id            String   @id @default(uuid()) @db.Uuid
+  reviewId      String   @map("review_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  kind          String /// 'thorn' | 'rose' | 'seed' | 'action'
+  content       String
+  order         Float    @default(0)
+  /// Set on an action note when closing the week turned it into a task. The
+  /// task outlives the note's link to it: deleting the task only clears this.
+  carriedTaskId String?  @map("carried_task_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  review      Review  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user        Profile @relation(fields: [userId], references: [id])
+  carriedTask Task?   @relation(fields: [carriedTaskId], references: [id], onDelete: SetNull)
+
+  @@index([reviewId, kind, order])
+  @@map("review_notes")
 }
 
 /// A recurring task template. Never shown in task lists; spawns `Task`

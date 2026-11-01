@@ -62,7 +62,7 @@ export async function provisionSessionUser(
 }
 
 /** True for a Prisma unique-constraint violation (error code P2002). */
-function isUniqueViolation(e: unknown): boolean {
+export function isUniqueViolation(e: unknown): boolean {
   return (
     typeof e === "object" &&
     e !== null &&

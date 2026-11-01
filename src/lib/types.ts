@@ -75,3 +75,31 @@ export type ConnectedAppDTO = {
   createdAt: string; // ISO
   lastUsedAt: string | null; // ISO
 };
+
+/** Where a note sits on a weekly review board (docs/REVIEWS.md):
+ * the unsorted pile or one of the four columns. */
+export type NoteKind = "unsorted" | "thorn" | "rose" | "seed" | "action";
+
+export type ReviewNoteDTO = {
+  id: string;
+  kind: NoteKind;
+  content: string;
+  order: number;
+  /** The task this action became when the week was closed; null otherwise. */
+  carriedTaskId: string | null;
+  createdAt: string; // ISO
+};
+
+export type ReviewDTO = {
+  id: string;
+  weekStart: string; // 'YYYY-MM-DD', a Sunday
+  closedAt: string | null; // ISO
+  notes: ReviewNoteDTO[];
+};
+
+/** One row of the Reviews list. */
+export type ReviewSummaryDTO = {
+  weekStart: string;
+  closedAt: string | null;
+  counts: Record<NoteKind, number>;
+};

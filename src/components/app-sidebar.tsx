@@ -9,6 +9,7 @@ import {
   Hash,
   Inbox,
   MoreHorizontal,
+  NotebookPen,
   Plus,
   Repeat,
   Trash2,
@@ -37,6 +38,7 @@ const NAV = [
   // completed" toggle.
   { href: "/activity", label: "Activity", icon: CheckCircle2 },
   { href: "/routines", label: "Routines", icon: Repeat },
+  { href: "/reviews", label: "Reviews", icon: NotebookPen },
   // Settings is deliberately absent: the user menu in the header is the single
   // entry point to /settings.
 ];
@@ -83,7 +85,8 @@ export function AppSidebar({
       )}
     >
       {NAV.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
+        // A prefix match, so /reviews stays lit on a week's board.
+        const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
