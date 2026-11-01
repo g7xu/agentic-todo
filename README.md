@@ -10,7 +10,8 @@
   <img src="public/screenshot-upcoming.png" width="800" alt="The Upcoming board: a column per day holding tasks with priorities, deadlines and routines">
 </p>
 
-The web app at [todo.g7xu.dev](https://todo.g7xu.dev) holds your tasks, projects and routines.
+The web app at [todo.g7xu.dev](https://todo.g7xu.dev) holds your tasks, projects, routines and
+weekly reviews.
 Claude connects to the same account through a remote MCP server at `https://todo.g7xu.dev/api/mcp`,
 so you can ask it what is due, how a routine is going, or to add and reschedule work.
 
