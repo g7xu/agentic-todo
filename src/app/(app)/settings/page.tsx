@@ -1,3 +1,4 @@
+import { CapacityForm } from "@/components/settings/capacity-form";
 import { ConnectedApps } from "@/components/settings/connected-apps";
 import { TimezoneForm } from "@/components/settings/timezone-form";
 import { YourData } from "@/components/settings/your-data";
@@ -18,6 +19,11 @@ export default async function SettingsPage() {
       <section className="grid gap-2">
         <h2 className="text-lg font-medium">Timezone</h2>
         <TimezoneForm />
+      </section>
+
+      <section className="mt-10 grid gap-2">
+        <h2 className="text-lg font-medium">Available time</h2>
+        <CapacityForm />
       </section>
 
       <section className="mt-10 grid gap-2">

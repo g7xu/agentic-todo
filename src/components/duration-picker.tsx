@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ComponentType } from "react";
+import { useRef, useState, type ComponentType, type ReactElement } from "react";
 import { Clock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +38,8 @@ export function DurationPicker({
   max = 1440,
   fullWidth = false,
   clearLabel = "Clear estimate",
+  presets = PRESETS,
+  trigger: customTrigger,
 }: {
   value: number | null;
   onChange: (minutes: number | null) => void;
@@ -48,6 +50,12 @@ export function DurationPicker({
   /** Fill the container and look like a form field, for use in a dialog's grid. */
   fullWidth?: boolean;
   clearLabel?: string;
+  presets?: number[];
+  /**
+   * Replaces the bordered chip with this element. There is then no `X` beside
+   * it, so clearing becomes the last item in the menu.
+   */
+  trigger?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -80,7 +88,7 @@ export function DurationPicker({
     return true;
   }
 
-  const trigger = (
+  const trigger = customTrigger ?? (
     <button
       type="button"
       className={cn(
@@ -96,6 +104,74 @@ export function DurationPicker({
     </button>
   );
 
+  const menu = (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(next) => {
+        // Opening reseeds the draft from the committed value, so a
+        // typed-but-abandoned entry never survives into the next visit.
+        // Closing commits whatever was typed, so a value doesn't need Enter to
+        // stick; an invalid draft is dropped rather than blocking the close.
+        if (next) writeDraft(value === null ? "" : formatDuration(value));
+        else commitDraft();
+        setOpen(next);
+      }}
+    >
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        {presets.map((m) => (
+          <DropdownMenuItem key={m} onSelect={() => writeDraft(formatDuration(m))}>
+            {formatDuration(m)}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        {/* stopPropagation or the menu's typeahead eats the keystrokes. */}
+        <div className="px-2 py-1.5" onKeyDown={(e) => e.stopPropagation()}>
+          <input
+            value={draft}
+            placeholder="e.g. 1h30"
+            aria-label="Custom duration"
+            aria-invalid={invalid || undefined}
+            className={cn(
+              "w-28 bg-transparent text-sm outline-none",
+              invalid && "text-destructive",
+            )}
+            onChange={(e) => writeDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (commitDraft()) setOpen(false);
+            }}
+          />
+          <p className="text-muted-foreground mt-1 text-xs">
+            {invalid
+              ? parsed !== null && parsed > max
+                ? `Max ${formatDuration(max)}`
+                : "Try 30, 1h30, or 90m"
+              : draft.trim() === ""
+                ? "30 · 1h30 · 1.5h · 90m"
+                : formatDuration(parsed!)}
+          </p>
+        </div>
+        {customTrigger && value !== null && (
+          <>
+            <DropdownMenuSeparator />
+            {/* Through the draft, not onChange: closing commits the draft,
+                which would otherwise write the old value straight back. */}
+            <DropdownMenuItem onSelect={() => writeDraft("")}>
+              {clearLabel}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+);
+
+  if (customTrigger) return menu;
+
   return (
     <div
       className={cn(
@@ -103,59 +179,7 @@ export function DurationPicker({
         fullWidth ? "h-9 w-full" : "h-8",
       )}
     >
-      <DropdownMenu
-        open={open}
-        onOpenChange={(next) => {
-          // Opening reseeds the draft from the committed value, so a
-          // typed-but-abandoned entry never survives into the next visit.
-          // Closing commits whatever was typed, so a value doesn't need Enter to
-          // stick; an invalid draft is dropped rather than blocking the close.
-          if (next) writeDraft(value === null ? "" : formatDuration(value));
-          else commitDraft();
-          setOpen(next);
-        }}
-      >
-        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          onCloseAutoFocus={(e) => e.preventDefault()}
-        >
-          {PRESETS.map((m) => (
-            <DropdownMenuItem key={m} onSelect={() => writeDraft(formatDuration(m))}>
-              {formatDuration(m)}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          {/* stopPropagation or the menu's typeahead eats the keystrokes. */}
-          <div className="px-2 py-1.5" onKeyDown={(e) => e.stopPropagation()}>
-            <input
-              value={draft}
-              placeholder="e.g. 1h30"
-              aria-label="Custom duration"
-              aria-invalid={invalid || undefined}
-              className={cn(
-                "w-28 bg-transparent text-sm outline-none",
-                invalid && "text-destructive",
-              )}
-              onChange={(e) => writeDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                if (commitDraft()) setOpen(false);
-              }}
-            />
-            <p className="text-muted-foreground mt-1 text-xs">
-              {invalid
-                ? parsed !== null && parsed > max
-                  ? `Max ${formatDuration(max)}`
-                  : "Try 30, 1h30, or 90m"
-                : draft.trim() === ""
-                  ? "30 · 1h30 · 1.5h · 90m"
-                  : formatDuration(parsed!)}
-            </p>
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {menu}
       {value !== null && (
         <button
           type="button"
