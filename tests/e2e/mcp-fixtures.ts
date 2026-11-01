@@ -67,6 +67,7 @@ async function main() {
     select: { id: true },
   });
   for (const p of stale) {
+    await prisma.review.deleteMany({ where: { userId: p.id } });
     await prisma.task.deleteMany({ where: { userId: p.id } });
     await prisma.routine.deleteMany({ where: { userId: p.id } });
     await prisma.project.deleteMany({ where: { userId: p.id } });

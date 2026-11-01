@@ -57,8 +57,9 @@ the **+** menu.
 
 ## What Claude can do
 
-Read and change tasks and projects; read routines and their completion history. Routines are
-edited in the app. The tool list and the security model are in [docs/MCP.md](docs/MCP.md).
+Read and change tasks and projects; read routines and their completion history; draft, sort and
+close weekly reviews (the `weekly_review` prompt does a whole week in one go). Routines are edited
+in the app. The tool list and the security model are in [docs/MCP.md](docs/MCP.md).
 
 ## Development
 

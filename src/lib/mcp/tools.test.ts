@@ -50,13 +50,34 @@ async function listTools() {
   const list = (await call(2, "tools/list", {})) as unknown as {
     result: { tools: ListedTool[] };
   };
+  const prompts = (await call(3, "prompts/list", {})) as unknown as {
+    result: { prompts: { name: string; description?: string }[] };
+  };
+  const prompt = (await call(4, "prompts/get", {
+    name: "weekly_review",
+    arguments: { week: "2026-10-28" },
+  })) as unknown as {
+    result: { messages: { role: string; content: { text: string } }[] };
+  };
   await server.close();
-  return { instructions: init.result.instructions, tools: list.result.tools };
+  return {
+    instructions: init.result.instructions,
+    tools: list.result.tools,
+    prompts: prompts.result.prompts,
+    weeklyReview: prompt.result.messages,
+  };
 }
 
-const READ_TOOLS = ["list_tasks", "list_projects", "list_routines", "get_routine_history"];
+const READ_TOOLS = [
+  "list_tasks",
+  "list_projects",
+  "list_routines",
+  "get_routine_history",
+  "list_reviews",
+  "get_review",
+];
 /** The only writes that never overwrite or remove an existing row. */
-const ADDITIVE_TOOLS = ["create_task", "create_project"];
+const ADDITIVE_TOOLS = ["create_task", "create_project", "add_review_note"];
 
 /** Phrases that read as instructions to the model rather than facts about
  * the data. The connector directory rejects descriptions that steer the
@@ -66,7 +87,7 @@ const DIRECTIVE = /\b(you should|you must|always|never|do not|don't|propose|ask 
 describe("MCP tool surface", () => {
   it("names every tool for a directory listing", async () => {
     const { tools } = await listTools();
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(20);
     for (const t of tools) {
       expect(t.name).toMatch(/^[a-z_]+$/);
       expect(t.name.length).toBeLessThanOrEqual(64);
@@ -99,5 +120,16 @@ describe("MCP tool surface", () => {
     for (const t of tools) {
       expect(t.description, t.name).not.toMatch(DIRECTIVE);
     }
+  });
+
+  it("offers the weekly review prompt, naming only tools that exist", async () => {
+    const { tools, prompts, weeklyReview } = await listTools();
+    expect(prompts.map((p) => p.name)).toEqual(["weekly_review"]);
+    const [message] = weeklyReview;
+    expect(message.role).toBe("user");
+    expect(message.content.text).toContain("2026-10-28");
+    const named = message.content.text.match(/\b[a-z]+_[a-z_]+\b/g) ?? [];
+    const toolNames = new Set(tools.map((t) => t.name));
+    for (const n of named) expect(toolNames, n).toContain(n);
   });
 });

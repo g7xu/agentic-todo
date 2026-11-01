@@ -48,8 +48,14 @@ same carry-three rule. Nothing was migrated from it.
   that is still open, after anything already there, creating that week's review if needed. Closing
   never waits on sorting and never drops a thought. A closed following week is skipped, since
   notes parked there could not be edited.
-- **DR8 — No AI in the app.** The board is written by hand. MCP review tools can later wrap the
-  same data functions (AGENT.md AG4).
+- **DR8 — No AI in the app.** The board is written by hand in the app, or by the user's own
+  Claude over MCP. The MCP tools wrap the same data functions as the board (AGENT.md AG4).
+- **DR9 — Claude drafts, the user closes.** Over MCP, Claude can read the board and add, edit,
+  move, delete and close (owner-decided 2026-11-01). Drafted notes may go in any column; a
+  misplaced note costs one drag. The `weekly_review` prompt gathers the week's evidence, drafts
+  the notes, suggests up to three actions to carry, and closes only after the user names them,
+  because a closed week cannot be reopened. This keeps the review to sorting and accepting, not a
+  writing session (AGENT.md AG2).
 
 ## 2. Reference
 
@@ -61,12 +67,13 @@ same carry-three rule. Nothing was migrated from it.
 | Server actions | `src/app/actions/reviews.ts` |
 | Reads | `GET /api/reviews`, `GET /api/reviews/{week}` |
 | Pages | `/reviews`, `/reviews/{week}` |
+| MCP tools | `list_reviews`, `get_review`, `add_review_note`, `update_review_note`, `move_review_note`, `delete_review_note`, `close_review` |
+| MCP prompt | `weekly_review` (optional `week`, any day inside it) |
 
 Account export includes reviews with their notes. Account deletion removes them.
 
 ## 3. Not built
 
 - Reopening a closed week.
-- Capturing an unsorted note from outside the board, such as from the header or over MCP.
-- MCP tools for reading or drafting a review.
+- Capturing an unsorted note from elsewhere in the app, such as the header.
 - Routine results and pushed-task signals in the evidence panel.

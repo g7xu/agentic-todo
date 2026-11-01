@@ -190,6 +190,14 @@ describe("editing notes", () => {
     expect(db.notes[0]).toMatchObject({ kind: "action", order: 0.5 });
   });
 
+  it("appends a moved note to its new column when no order is given", async () => {
+    await addNote(USER, WEEK, { kind: "action", content: "Book flights" });
+    await addNote(USER, WEEK, { kind: "action", content: "Renew passport" });
+    const n = await addNote(USER, WEEK, { kind: "unsorted", content: "Call mom" });
+    const moved = await moveNote(USER, n.id, { kind: "action" });
+    expect(moved).toMatchObject({ kind: "action", order: 3 });
+  });
+
   it("does not let another user touch a note", async () => {
     const n = await addNote(USER, WEEK, { kind: "seed", content: "Mine" });
     await expect(deleteNote(OTHER, n.id)).rejects.toThrow("Note not found");

@@ -158,14 +158,18 @@ export async function addNote(
   return noteToDTO(note);
 }
 
-/** Throws unless the note is the user's and its week is still open. */
-async function assertEditable(userId: string, id: string): Promise<void> {
+/**
+ * Throws unless the note is the user's and its week is still open; returns
+ * the note's review id.
+ */
+async function assertEditable(userId: string, id: string): Promise<string> {
   const note = await prisma.reviewNote.findFirst({
     where: { id, userId },
-    select: { review: { select: { closedAt: true } } },
+    select: { reviewId: true, review: { select: { closedAt: true } } },
   });
   if (!note) throw new Error("Note not found");
   if (note.review.closedAt) throw new Error(REVIEW_CLOSED);
+  return note.reviewId;
 }
 
 export async function updateNote(
@@ -182,15 +186,24 @@ export async function updateNote(
   return noteToDTO(note);
 }
 
+/** Without an `order`, the note goes after the last one in its new place. */
 export async function moveNote(
   userId: string,
   id: string,
-  input: { kind: NoteKind; order: number },
+  input: { kind: NoteKind; order?: number },
 ): Promise<ReviewNoteDTO> {
-  await assertEditable(userId, id);
+  const reviewId = await assertEditable(userId, id);
+  let order = input.order;
+  if (order === undefined) {
+    const max = await prisma.reviewNote.aggregate({
+      where: { reviewId, kind: input.kind, id: { not: id } },
+      _max: { order: true },
+    });
+    order = (max._max.order ?? 0) + 1;
+  }
   const note = await prisma.reviewNote.update({
     where: { id },
-    data: { kind: input.kind, order: input.order },
+    data: { kind: input.kind, order },
     select: NOTE_SELECT,
   });
   return noteToDTO(note);

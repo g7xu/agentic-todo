@@ -7,6 +7,17 @@ import { z, ZodError } from "zod";
 import { getTimezone } from "@/lib/data/profile";
 import { createProject, listProjects } from "@/lib/data/projects";
 import {
+  addNote,
+  closeReview,
+  deleteNote,
+  getReview,
+  listCompletedBetween,
+  listReviews,
+  moveNote,
+  REVIEW_CLOSED,
+  updateNote,
+} from "@/lib/data/reviews";
+import {
   listRoutineHistory,
   listRoutines,
   recordMissedDays,
@@ -21,11 +32,18 @@ import {
   setTaskStatus,
   updateTask,
 } from "@/lib/data/tasks";
-import { addDays, diffDays, todayStr } from "@/lib/date";
+import { addDays, diffDays, startOfWeek, todayStr } from "@/lib/date";
 import { cadenceLabel } from "@/lib/repeat";
+import { MAX_CARRIED } from "@/lib/reviews";
 import type { RoutineDayDTO } from "@/lib/data/routines";
-import type { TaskDTO } from "@/lib/types";
+import type { ReviewNoteDTO, TaskDTO } from "@/lib/types";
 import { projectNameSchema } from "@/lib/validation/projects";
+import {
+  carriedIdsSchema,
+  noteContentSchema,
+  noteIdSchema,
+  noteKindSchema,
+} from "@/lib/validation/reviews";
 import {
   clampHistoryDays,
   DEFAULT_HISTORY_DAYS,
@@ -50,6 +68,8 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - Tasks live in projects; omit projectId to use the Inbox.
 - Routines are recurring templates. Their daily outcomes appear as tasks with a routineId; they are read-only through this server.
 - All dates are YYYY-MM-DD in the user's own timezone, which list_tasks reports as "today" and "timezone".
+- Weekly reviews are boards keyed by the Sunday that starts the week. Notes sit in the unsorted pile or in one of four columns: thorn (what stung), rose (what went well), seed (worth trying), action (what to do next).
+- Closing a week makes its board read-only, turns up to ${MAX_CARRIED} chosen action notes into Inbox tasks planned for the next Sunday, and moves unsorted notes to the next open week. There is no reopen.
 - Writes take effect immediately; the server keeps no drafts and has no undo.`;
 
 const WRITE_SCOPE = "tasks:write";
@@ -80,6 +100,10 @@ const EXPECTED_DATA_ERRORS = new Set([
   "Routine tasks can't be rescheduled",
   "Missed routine days can't be completed",
   "The Inbox project cannot be deleted",
+  "Note not found",
+  "Review not found",
+  REVIEW_CLOSED,
+  "Only this week's action notes can be carried",
 ]);
 
 /** A message composed inside a tool handler for the model to read. */
@@ -149,7 +173,27 @@ function compactTask(t: TaskDTO) {
   );
 }
 
+/** Notes without ordering bookkeeping; a carriedTaskId only once it exists. */
+function compactNote(n: ReviewNoteDTO) {
+  return {
+    id: n.id,
+    kind: n.kind,
+    content: n.content,
+    ...(n.carriedTaskId ? { carriedTaskId: n.carriedTaskId } : {}),
+  };
+}
+
 const idList = z.array(taskIdSchema).min(1).max(MAX_BULK_IDS);
+
+/** Any day names its week, so the model never has to work out the Sunday. */
+const weekInput = dateStr
+  .optional()
+  .describe("Any YYYY-MM-DD inside the week. Defaults to the current week.");
+
+async function resolveWeek(userId: string, day: string | undefined) {
+  const tz = await getTimezone(userId);
+  return { tz, week: startOfWeek(day ?? todayStr(tz)) };
+}
 
 const historySchema = z
   .object({
@@ -386,6 +430,163 @@ export function registerTools(server: McpServer): void {
         return { from, to, routines: summarize(routines, days) };
       }),
   );
+
+  server.registerTool(
+    "list_reviews",
+    {
+      title: "List weekly reviews",
+      annotations: READ,
+      description:
+        "Every week that has a review, newest first, with its note count per column and when it was closed. Weeks nobody wrote in are absent.",
+      inputSchema: z.object({}),
+    },
+    (_args, ctx) => run(ctx, {}, (userId) => listReviews(userId)),
+  );
+
+  server.registerTool(
+    "get_review",
+    {
+      title: "Get weekly review",
+      annotations: READ,
+      description:
+        "One week's board: its notes in order, whether it is closed, and the one-off tasks completed that week. notes is empty for a week nobody wrote in.",
+      inputSchema: z.object({ week: weekInput }),
+    },
+    (args, ctx) =>
+      run(ctx, {}, async (userId) => {
+        const { tz, week } = await resolveWeek(userId, args.week);
+        const [review, completed] = await Promise.all([
+          getReview(userId, week),
+          listCompletedBetween(userId, week, addDays(week, 6), tz),
+        ]);
+        return {
+          week,
+          thisWeek: startOfWeek(todayStr(tz)),
+          closedAt: review?.closedAt ?? null,
+          notes: (review?.notes ?? []).map(compactNote),
+          completed: completed.map(compactTask),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "add_review_note",
+    {
+      title: "Add review note",
+      annotations: ADD,
+      description:
+        "Add a note at the end of a column of a week's board, creating the week's review if it has none. kind defaults to unsorted.",
+      inputSchema: z.object({
+        week: weekInput,
+        kind: noteKindSchema.optional(),
+        content: noteContentSchema,
+      }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) => {
+        const { week } = await resolveWeek(userId, args.week);
+        const note = await addNote(userId, week, {
+          kind: args.kind ?? "unsorted",
+          content: args.content,
+        });
+        return { week, ...compactNote(note) };
+      }),
+  );
+
+  server.registerTool(
+    "update_review_note",
+    {
+      title: "Edit review note",
+      annotations: CHANGE,
+      description: "Replace a note's text. Notes on a closed week are read-only.",
+      inputSchema: z.object({ id: noteIdSchema, content: noteContentSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) =>
+        compactNote(await updateNote(userId, args.id, args.content)),
+      ),
+  );
+
+  server.registerTool(
+    "move_review_note",
+    {
+      title: "Move review note",
+      annotations: CHANGE,
+      description:
+        "Move a note to the end of another column or of the unsorted pile. Notes on a closed week are read-only.",
+      inputSchema: z.object({ id: noteIdSchema, kind: noteKindSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) =>
+        compactNote(await moveNote(userId, args.id, { kind: args.kind })),
+      ),
+  );
+
+  server.registerTool(
+    "delete_review_note",
+    {
+      title: "Delete review note",
+      annotations: CHANGE,
+      description: "Permanently delete a note. Notes on a closed week are read-only.",
+      inputSchema: z.object({ id: noteIdSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) => {
+        await deleteNote(userId, args.id);
+        return { deleted: true, id: args.id };
+      }),
+  );
+
+  server.registerTool(
+    "close_review",
+    {
+      title: "Close weekly review",
+      annotations: CHANGE,
+      description: `Close a week for good. Each action note in carry (at most ${MAX_CARRIED}, possibly none) becomes an Inbox task planned for the next Sunday; unsorted notes move to the next open week; the board becomes read-only and cannot be reopened.`,
+      inputSchema: z.object({ week: dateStr, carry: carriedIdsSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) => {
+        const review = await closeReview(userId, startOfWeek(args.week), args.carry);
+        return {
+          week: review.weekStart,
+          closedAt: review.closedAt,
+          notes: review.notes.map(compactNote),
+        };
+      }),
+  );
+
+  server.registerPrompt(
+    "weekly_review",
+    {
+      title: "Draft my weekly review",
+      description:
+        "Reads the week's finished tasks, routine record and open work, drafts notes onto the review board, and suggests which actions to carry.",
+      argsSchema: z.object({
+        week: dateStr
+          .optional()
+          .describe("Any YYYY-MM-DD inside the week. Defaults to the current week."),
+      }),
+    },
+    (args) => ({
+      messages: [
+        {
+          role: "user",
+          content: { type: "text", text: weeklyReviewPrompt(args.week) },
+        },
+      ],
+    }),
+  );
+}
+
+function weeklyReviewPrompt(week: string | undefined): string {
+  const which = week ? `the week containing ${week}` : "this week";
+  const weekArg = week ? `{ week: "${week}" }` : "with no week";
+  return `Draft my weekly review for ${which}.
+
+1. Gather the evidence: get_review ${weekArg} for the board and the tasks I finished; get_routine_history with that week's Sunday-to-Saturday as from/to; list_tasks for what is still open or overdue.
+2. Write notes with add_review_note. Each note is one short, concrete sentence tied to something in the evidence: thorn for what stung (missed routines, slipped or overdue work), rose for what went well, seed for something worth trying, action for one specific thing to do next week. A thought whose column is unclear goes in unsorted. Skip anything the board already says.
+3. Show me what you added, column by column, and suggest up to ${MAX_CARRIED} actions to carry into next week. Close the week with close_review only after I say which ones to carry.`;
 }
 
 function summarize(
