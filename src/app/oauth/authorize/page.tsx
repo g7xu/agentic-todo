@@ -23,8 +23,8 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const SCOPE_COPY: Record<Scope, string> = {
-  "tasks:read": "See your tasks, projects, routines and completion history",
-  "tasks:write": "Add, edit, reschedule, complete and delete tasks and projects",
+  "tasks:read": "See your tasks, projects, routines, completion history and weekly reviews",
+  "tasks:write": "Add, edit, reschedule, complete and delete tasks and projects, and write and close weekly reviews",
 };
 
 /**

@@ -47,6 +47,10 @@ provided by the identity vendor.
 - **DM9 — Write tools check scope in the handler and return a readable tool error.** No step-up
   flow in v1, since scopes are co-granted.
 - **DM10 — Tool surface v1:** tasks and projects read/write; routines and history read-only.
+- **DM11 — Weekly reviews read/write, under the same two scopes** (owner-decided 2026-11-01,
+  REVIEWS.md DR9). Seven tools and one prompt, `weekly_review`. A review is task data, so no third
+  scope; a new scope would force every existing grant back through consent. Tools take any day of
+  a week and resolve its Sunday, so the model never computes week keys.
 
 ## 2. Product requirements
 
@@ -54,6 +58,7 @@ provided by the identity vendor.
 - Connect Claude to the app from claude.ai or Claude Code with one URL and one consent.
 - Ask Claude about tasks, projects, routines and completion history, and have it create, edit,
   reschedule, complete and delete tasks on explicit request.
+- Have Claude draft a week's review from the finished work and routine record, and close it.
 - See and revoke connected apps in Settings.
 
 ### Non-goals
