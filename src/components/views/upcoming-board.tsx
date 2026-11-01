@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { addDays } from "@/lib/date";
 import { formatDuration } from "@/lib/duration";
+import { DayCapacity } from "@/components/day-capacity";
 import { PlannedTotal } from "@/components/planned-total";
 import { QuickAdd } from "@/components/quick-add";
 import {
@@ -44,6 +45,7 @@ import {
   useTasks,
   useUncompleteTask,
 } from "@/hooks/use-tasks";
+import { useCapacity } from "@/hooks/use-capacity";
 import { useProjects } from "@/hooks/use-projects";
 import { useCompleteRoutineOccurrence, useRoutines } from "@/hooks/use-routines";
 import { useToday } from "@/hooks/use-today";
@@ -57,7 +59,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
-import type { ProjectDTO, RoutineDTO, TaskDTO } from "@/lib/types";
+import type { CapacityDTO, ProjectDTO, RoutineDTO, TaskDTO } from "@/lib/types";
 
 /** Check-circle tint per priority — replaces the old flag while keeping the
  * priority visible, Todoist-style. The `!` on border colors is required:
@@ -444,6 +446,7 @@ function Column({
   routineCards,
   taskById,
   projects,
+  capacity,
 }: {
   date: string;
   label: string;
@@ -452,6 +455,9 @@ function Column({
   routineCards: RoutineCardItem[];
   taskById: Map<string, TaskDTO>;
   projects: ProjectDTO[];
+  /** Undefined until loaded, or when it failed: the column then shows only
+   * the planned total, as it does for a day with no capacity. */
+  capacity?: CapacityDTO;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const [showCompleted, setShowCompleted] = useState(false);
@@ -462,18 +468,33 @@ function Column({
     ...ids.map((id) => taskById.get(id)).filter((t) => t !== undefined),
     ...routineCards.map((c) => c.routine),
   ];
+  const completed = completedIds
+    .map((id) => taskById.get(id))
+    .filter((t) => t !== undefined);
   return (
     <div className="flex max-h-full w-72 shrink-0 flex-col">
       {/* Label over total, not side by side: at this width the pair can't share
           a line, and the wrapped total used to spill across the next column. */}
-      <div className="flex flex-col items-start gap-0.5 px-1 pb-2">
-        <span className={cn("text-sm font-medium", isOverdue && "text-red-500")}>
+      <div className="group/header text-muted-foreground flex flex-col items-start gap-0.5 px-1 pb-2 text-xs">
+        <span
+          className={cn(
+            "text-foreground text-sm font-medium",
+            isOverdue && "text-red-500",
+          )}
+        >
           {label}
         </span>
-        <PlannedTotal
-          items={planned}
-          className="text-muted-foreground text-xs font-normal"
-        />
+        {/* Overdue is a pile of past days, not a day with a budget. */}
+        {isOverdue || !capacity ? (
+          <PlannedTotal items={planned} />
+        ) : (
+          <DayCapacity
+            date={date}
+            capacity={capacity}
+            open={planned}
+            completed={completed}
+          />
+        )}
       </div>
       {/* The box hugs its content (columns are `items-start` in the board
           row) but never exceeds the board height (`max-h-full` on the column
@@ -562,6 +583,7 @@ export function UpcomingBoard() {
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
   const { data: routines = [] } = useRoutines();
+  const { data: capacity } = useCapacity();
   const move = useMoveTask();
 
   const [horizon, setHorizon] = useState(7);
@@ -802,6 +824,7 @@ export function UpcomingBoard() {
               routineCards={routineCardsByDate[date] ?? []}
               taskById={taskById}
               projects={projects}
+              capacity={capacity}
             />
           ))}
           <div className="flex w-40 shrink-0 items-start pt-7">

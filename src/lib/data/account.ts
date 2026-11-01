@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { dbDateToStr } from "@/lib/date";
 import { listProjects } from "@/lib/data/projects";
 import { listRoutines } from "@/lib/data/routines";
 import { TASK_SELECT, taskToDTO } from "@/lib/data/tasks";
@@ -13,7 +14,15 @@ export type AccountExport = {
   format: "agentictodo-export";
   version: 1;
   exportedAt: string;
-  profile: { email: string; timezone: string; createdAt: string } | null;
+  profile: {
+    email: string;
+    timezone: string;
+    /** Default available minutes per day (docs/CAPACITY.md). */
+    dailyCapacity: number | null;
+    createdAt: string;
+  } | null;
+  /** Per-day available minutes, past days included. */
+  dayCapacities: { date: string; minutes: number }[];
   projects: ProjectDTO[];
   routines: RoutineDTO[];
   /** Every task whatever its status, unlike `listTasks`, which windows completed ones. */
@@ -21,10 +30,10 @@ export type AccountExport = {
 };
 
 export async function exportAccount(userId: string): Promise<AccountExport> {
-  const [profile, projects, routines, tasks] = await Promise.all([
+  const [profile, projects, routines, tasks, dayCapacities] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: userId },
-      select: { email: true, timezone: true, createdAt: true },
+      select: { email: true, timezone: true, dailyCapacity: true, createdAt: true },
     }),
     listProjects(userId),
     listRoutines(userId),
@@ -32,6 +41,11 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
       where: { userId },
       orderBy: { createdAt: "asc" },
       select: TASK_SELECT,
+    }),
+    prisma.dayCapacity.findMany({
+      where: { userId },
+      orderBy: { date: "asc" },
+      select: { date: true, minutes: true },
     }),
   ]);
 
@@ -42,8 +56,13 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
     profile: profile && {
       email: profile.email,
       timezone: profile.timezone,
+      dailyCapacity: profile.dailyCapacity,
       createdAt: profile.createdAt.toISOString(),
     },
+    dayCapacities: dayCapacities.map((d) => ({
+      date: dbDateToStr(d.date)!,
+      minutes: d.minutes,
+    })),
     projects,
     routines,
     tasks: tasks.map(taskToDTO),
@@ -52,7 +71,7 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
 
 /**
  * Deletes the account in one transaction: every app-owned row (tasks,
- * routines, projects, profile, and the OAuth grants, tokens and codes that
+ * routines, projects, day capacities, profile, and the OAuth grants, tokens and codes that
  * let MCP clients act for the user) and the user's row in Neon Auth's
  * `neon_auth.user` table. Shared `OAuthClient` rows stay, since other
  * users' grants point at them.
@@ -65,13 +84,14 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
 export async function deleteAccount(userId: string): Promise<void> {
   const where = { userId };
   // Order follows the foreign keys: tasks reference routines and projects,
-  // routines reference projects, and all three reference the profile.
+  // routines reference projects, and all of them reference the profile.
   await prisma.$transaction([
     prisma.oAuthGrant.deleteMany({ where }),
     prisma.oAuthCode.deleteMany({ where }),
     prisma.task.deleteMany({ where }),
     prisma.routine.deleteMany({ where }),
     prisma.project.deleteMany({ where }),
+    prisma.dayCapacity.deleteMany({ where }),
     prisma.profile.deleteMany({ where: { id: userId } }),
     prisma.$executeRaw`DELETE FROM neon_auth."user" WHERE id = ${userId}::uuid`,
   ]);

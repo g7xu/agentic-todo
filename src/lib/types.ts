@@ -49,6 +49,13 @@ export type RoutineDTO = {
   createdAt: string;
 };
 
+/** Working minutes per day (docs/CAPACITY.md). `days` holds overrides keyed by
+ * 'YYYY-MM-DD', from today on; a day missing from it uses `defaultMinutes`. */
+export type CapacityDTO = {
+  defaultMinutes: number | null;
+  days: Record<string, number>;
+};
+
 export type ProjectDTO = {
   id: string;
   name: string;

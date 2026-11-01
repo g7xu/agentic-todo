@@ -29,6 +29,7 @@ async function countRows(uid: string, mine: boolean): Promise<Counts> {
        (SELECT count(*) FROM projects WHERE user_id ${op} $1::uuid) AS projects,
        (SELECT count(*) FROM tasks WHERE user_id ${op} $1::uuid) AS tasks,
        (SELECT count(*) FROM routines WHERE user_id ${op} $1::uuid) AS routines,
+       (SELECT count(*) FROM day_capacities WHERE user_id ${op} $1::uuid) AS day_capacities,
        (SELECT count(*) FROM oauth_grants WHERE user_id ${op} $1::uuid) AS grants,
        (SELECT count(*) FROM oauth_codes WHERE user_id ${op} $1::uuid) AS codes,
        (SELECT count(*) FROM oauth_tokens t JOIN oauth_grants g ON g.id = t.grant_id
@@ -55,7 +56,10 @@ async function seed(uid: string, clientId: string): Promise<void> {
     INSERT INTO neon_auth.account ("userId", "accountId", "providerId", "updatedAt")
     VALUES (${uid}::uuid, ${uid}, 'google', now())`;
 
-  await prisma.profile.create({ data: { id: uid, email } });
+  await prisma.profile.create({ data: { id: uid, email, dailyCapacity: 360 } });
+  await prisma.dayCapacity.create({
+    data: { userId: uid, date: new Date("2026-10-04"), minutes: 120 },
+  });
   const inbox = await prisma.project.create({
     data: { userId: uid, name: "Inbox", isInbox: true },
   });
@@ -128,6 +132,8 @@ async function main() {
     assert.equal(exported.routines.length, 1);
     assert.equal(exported.tasks.length, 3, "export includes completed and routine tasks");
     assert.ok(exported.tasks.some((t) => t.dueDate === "2026-10-05"), "dates export as YYYY-MM-DD");
+    assert.equal(exported.profile?.dailyCapacity, 360);
+    assert.deepEqual(exported.dayCapacities, [{ date: "2026-10-04", minutes: 120 }]);
     console.log("PASS export holds every row");
 
     await deleteAccount(uid);

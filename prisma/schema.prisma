@@ -17,17 +17,35 @@ datasource db {
 
 /// One row per authenticated user. `id` is the Neon Auth (Better Auth) user uuid.
 model Profile {
-  id         String   @id @db.Uuid /// = neon_auth.user.id
-  email      String
-  timezone   String   @default("UTC") /// IANA tz; single source of truth for "today" (TDD §5)
-  tzCaptured Boolean  @default(false) @map("tz_captured")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String   @id @db.Uuid /// = neon_auth.user.id
+  email         String
+  timezone      String   @default("UTC") /// IANA tz; single source of truth for "today" (TDD §5)
+  tzCaptured    Boolean  @default(false) @map("tz_captured")
+  /// Working minutes available on a day without its own `DayCapacity` row
+  /// (docs/CAPACITY.md). Null = never set, and the board shows no budget (DC1).
+  dailyCapacity Int?     @map("daily_capacity")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  projects Project[]
-  tasks    Task[]
-  routines Routine[]
+  projects      Project[]
+  tasks         Task[]
+  routines      Routine[]
+  dayCapacities DayCapacity[]
 
   @@map("profiles")
+}
+
+/// One day's available minutes, replacing `Profile.dailyCapacity` for that
+/// date (docs/CAPACITY.md DC2). 0 is a day off; deleting the row is what
+/// returns the day to the default.
+model DayCapacity {
+  userId  String   @map("user_id") @db.Uuid
+  date    DateTime @db.Date
+  minutes Int
+
+  user Profile @relation(fields: [userId], references: [id])
+
+  @@id([userId, date])
+  @@map("day_capacities")
 }
 
 model Project {

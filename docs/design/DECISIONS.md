@@ -1,20 +1,27 @@
 # Decisions — agenticTODO
 
 Decisions surfaced by the 10-round review/revise pass over the original PRD, [TDD.md](./TDD.md)
-and build prompts (the PRD and prompts have since been removed from the repo). Last updated: 2026-10-31 (D8 — estimate vs. actual on `/activity`, spec in
-[ESTIMATE-VS-ACTUAL.md](../ESTIMATE-VS-ACTUAL.md)).
+and build prompts (the PRD and prompts have since been removed from the repo). Last updated: 2026-11-01 (D9 — available time per day on Upcoming, spec in
+[CAPACITY.md](../CAPACITY.md)).
 
 Two kinds of entries:
 - ✅ **Provisionally resolved** — the docs already chose a default and wrote it in. Listed so you can
   veto. If you're happy, no action.
-- **Owner-decided (D1–D8)** — the product trade-offs that were left open are now answered
+- **Owner-decided (D1–D9)** — the product trade-offs that were left open are now answered
   (2026-06-28; D6 the backend-stack switch on 2026-06-29; D7 the MCP surface on 2026-10-02; D8 estimate
-  vs. actual on 2026-10-31) and
+  vs. actual on 2026-10-31; D9 available time per day on 2026-11-01) and
   folded into the docs. Recorded below with the chosen option for each.
 
 ---
 
 ## Resolved (owner-decided 2026-06-28)
+
+### D9 — Available time per day on the Upcoming board; one default plus per-day overrides (decided 2026-11-01)
+Each Upcoming day column sets its load against a budget, the capacity warning ESTIMATES.md deferred.
+The budget is a default from Settings, unset for a new account, which any single day can override
+(0 is a day off). Completed work counts against the day, and there is no clock awareness. Full spec
+in [CAPACITY.md](../CAPACITY.md) (DC1–DC6). Data model: `profiles.daily_capacity` plus a
+`day_capacities` row per overridden (user, date).
 
 ### D8 — Estimate vs. actual by project on `/activity`; no labels field (decided 2026-10-31)
 `/activity` compares estimated and logged hours per project, the comparison ESTIMATES.md deferred.
