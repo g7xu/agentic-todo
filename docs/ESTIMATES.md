@@ -240,7 +240,8 @@ showing `2h`.
 
 ## 5. Deferred (v2 candidates)
 
-- **Estimate vs. actual analytics** — the comparison the two fields now make possible.
+- **Estimate vs. actual analytics** — the comparison the two fields now make possible. Built as
+  the `/activity` section in [ESTIMATE-VS-ACTUAL.md](./ESTIMATE-VS-ACTUAL.md).
 - **Capacity warning** on a day whose total exceeds a configured working day.
 - **Estimate-aware review** — `/api/review` balancing days by load rather than count.
 - **Timers** — start/stop that writes `timeUsed`, removing the last manual duration entry.
