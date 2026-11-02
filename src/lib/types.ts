@@ -56,6 +56,23 @@ export type CapacityDTO = {
   days: Record<string, number>;
 };
 
+/** The user's running timer (docs/TIMERS.md), with the task fields the header
+ * pill and the running card draw. `timeUsed` excludes the running session. */
+export type RunningTimerDTO = {
+  taskId: string;
+  content: string;
+  estimate: number | null;
+  timeUsed: number | null;
+  startedAt: string; // ISO timestamp, set by the server (DT7)
+};
+
+/** What the timer read and every timer action return. `now` is the server's
+ * clock, which the client uses to correct its own (docs/TIMERS.md DT7). */
+export type TimerStateDTO = {
+  timer: RunningTimerDTO | null;
+  now: string; // ISO timestamp
+};
+
 export type ProjectDTO = {
   id: string;
   name: string;

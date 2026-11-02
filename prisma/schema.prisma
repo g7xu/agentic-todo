@@ -32,6 +32,7 @@ model Profile {
   dayCapacities DayCapacity[]
   reviews       Review[]
   reviewNotes   ReviewNote[]
+  timeEntries   TimeEntry[]
 
   @@map("profiles")
 }
@@ -99,6 +100,7 @@ model Task {
   project     Project      @relation(fields: [projectId], references: [id])
   routine     Routine?     @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
   reviewNotes ReviewNote[] /// review actions this task was carried from (docs/REVIEWS.md)
+  timeEntries TimeEntry[]
 
   // Idempotency guard for routine materialization: at most one instance per
   // routine per day. NULLs are distinct in Postgres, so ordinary tasks
@@ -107,6 +109,26 @@ model Task {
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
   @@map("tasks")
+}
+
+/// One stretch of timed work on a task (docs/TIMERS.md). A null `endedAt` is
+/// the running timer; at most one per user, by a partial unique index added in
+/// raw SQL in the migration. Stopping adds the session to `Task.timeUsed`,
+/// which stays the authoritative total (DT2): the sessions record when the
+/// work happened and are never re-summed into it.
+model TimeEntry {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  taskId    String    @map("task_id") @db.Uuid
+  startedAt DateTime  @map("started_at") @db.Timestamptz(6)
+  endedAt   DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id])
+  task Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId, startedAt])
+  @@map("time_entries")
 }
 
 /// One weekly review (docs/REVIEWS.md). The row is created with the week's

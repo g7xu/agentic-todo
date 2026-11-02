@@ -96,8 +96,10 @@ const db = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/db", () => ({ prisma: db.prisma }));
+vi.mock("@/lib/data/timers", () => ({ stopTimerOnTasks: vi.fn() }));
 
 import { registerTools } from "@/lib/mcp/tools";
+import { stopTimerOnTasks } from "@/lib/data/timers";
 import { bulkComplete, setTaskStatus } from "./tasks";
 
 const USER = "00000000-0000-4000-8000-0000000000aa";
@@ -137,6 +139,7 @@ const stored = (id: string) => db.tasks.find((t) => t.id === id);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+  vi.mocked(stopTimerOnTasks).mockClear();
   const routineId = "00000000-0000-4000-8000-0000000000dd";
   db.tasks.splice(
     0,
@@ -170,6 +173,11 @@ describe("setTaskStatus completing", () => {
     expect(stored(ACTIVE)?.completedAt).toEqual(NOW);
   });
 
+  it("stops a timer running on the task", async () => {
+    await setTaskStatus(USER, ACTIVE, "completed");
+    expect(stopTimerOnTasks).toHaveBeenCalledWith(USER, [ACTIVE]);
+  });
+
   it.each([
     ["an ordinary task", DONE],
     ["a routine day", ROUTINE_DONE],
@@ -188,6 +196,7 @@ describe("setTaskStatus completing", () => {
       status: "missed",
       completedAt: null,
     });
+    expect(stopTimerOnTasks).not.toHaveBeenCalled();
   });
 });
 
@@ -218,6 +227,11 @@ describe("bulkComplete", () => {
       completedAt: null,
     });
     expect(stored(FOREIGN)?.status).toBe("active");
+    expect(stopTimerOnTasks).toHaveBeenCalledWith(USER, [
+      ACTIVE,
+      DONE,
+      ROUTINE_DONE,
+    ]);
   });
 
   it("reports no change when every row was already completed", async () => {

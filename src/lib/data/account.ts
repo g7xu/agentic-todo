@@ -32,6 +32,8 @@ export type AccountExport = {
   routines: RoutineDTO[];
   /** Every task whatever its status, unlike `listTasks`, which windows completed ones. */
   tasks: TaskDTO[];
+  /** Timed sessions (docs/TIMERS.md); a null `endedAt` is the running timer. */
+  timeEntries: { taskId: string; startedAt: string; endedAt: string | null }[];
   /** Weekly reviews with their notes (docs/REVIEWS.md). */
   reviews: {
     weekStart: string;
@@ -41,7 +43,7 @@ export type AccountExport = {
 };
 
 export async function exportAccount(userId: string): Promise<AccountExport> {
-  const [profile, projects, routines, tasks, dayCapacities, reviews] = await Promise.all([
+  const [profile, projects, routines, tasks, dayCapacities, timeEntries, reviews] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: userId },
       select: { email: true, timezone: true, dailyCapacity: true, createdAt: true },
@@ -57,6 +59,11 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
       where: { userId },
       orderBy: { date: "asc" },
       select: { date: true, minutes: true },
+    }),
+    prisma.timeEntry.findMany({
+      where: { userId },
+      orderBy: { startedAt: "asc" },
+      select: { taskId: true, startedAt: true, endedAt: true },
     }),
     prisma.review.findMany({
       where: { userId },
@@ -89,6 +96,11 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
     projects,
     routines,
     tasks: tasks.map(taskToDTO),
+    timeEntries: timeEntries.map((e) => ({
+      taskId: e.taskId,
+      startedAt: e.startedAt.toISOString(),
+      endedAt: e.endedAt ? e.endedAt.toISOString() : null,
+    })),
     reviews: reviews.map((r) => ({
       weekStart: dbDateToStr(r.weekStart)!,
       closedAt: r.closedAt ? r.closedAt.toISOString() : null,
@@ -99,7 +111,7 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
 
 /**
  * Deletes the account in one transaction: every app-owned row (reviews,
- * tasks, routines, projects, day capacities, profile, and the OAuth grants, tokens and codes that
+ * time entries, tasks, routines, projects, day capacities, profile, and the OAuth grants, tokens and codes that
  * let MCP clients act for the user) and the user's row in Neon Auth's
  * `neon_auth.user` table. Shared `OAuthClient` rows stay, since other
  * users' grants point at them.
@@ -112,13 +124,14 @@ export async function exportAccount(userId: string): Promise<AccountExport> {
 export async function deleteAccount(userId: string): Promise<void> {
   const where = { userId };
   // Order follows the foreign keys: review notes reference reviews and tasks,
-  // tasks reference routines and projects, routines reference projects, and
+  // time entries reference tasks, tasks reference routines and projects, routines reference projects, and
   // all of them reference the profile.
   await prisma.$transaction([
     prisma.oAuthGrant.deleteMany({ where }),
     prisma.oAuthCode.deleteMany({ where }),
     prisma.reviewNote.deleteMany({ where }),
     prisma.review.deleteMany({ where }),
+    prisma.timeEntry.deleteMany({ where }),
     prisma.task.deleteMany({ where }),
     prisma.routine.deleteMany({ where }),
     prisma.project.deleteMany({ where }),
