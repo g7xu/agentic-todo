@@ -59,6 +59,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
+import { useTimerControls } from "@/components/running-timer";
+import {
+  OVER_BORDER,
+  RUNNING_BORDER,
+  RunningTime,
+  TimerButton,
+} from "@/components/timer-button";
+import { useIsRunning, useRunningOver } from "@/hooks/use-timer";
 import type { CapacityDTO, ProjectDTO, RoutineDTO, TaskDTO } from "@/lib/types";
 
 /** Check-circle tint per priority — replaces the old flag while keeping the
@@ -140,11 +148,15 @@ function TaskCard({
   const del = useDeleteTask();
   const [editing, setEditing] = useState(false);
   const today = useToday();
+  const { beforeComplete } = useTimerControls();
+  const running = useIsRunning(task.id);
+  const over = useRunningOver(task.id, task.estimate);
 
   const project = projects.find((p) => p.id === task.projectId);
   const isTemp = task.id.startsWith("temp-");
   const isCompleted = task.status === "completed";
   const isRoutine = task.routineId !== null;
+  const timeable = !isTemp && !isCompleted && !isRoutine; // docs/TIMERS.md DT8
   // Deadline states, mirrored from task-row: red = hard date arrived/passed;
   // amber = planned date lands after the deadline.
   const deadlineHit =
@@ -166,6 +178,7 @@ function TaskCard({
         "bg-card group flex cursor-pointer items-start gap-2 rounded-md border p-2 text-sm shadow-sm",
         dragging && "ring-primary/40 ring-2",
         isCompleted && "opacity-70",
+        running && (over ? OVER_BORDER : RUNNING_BORDER),
       )}
       onPointerDown={(e) => {
         pressPos.current = { x: e.clientX, y: e.clientY };
@@ -193,7 +206,7 @@ function TaskCard({
         onClick={(e) => {
           e.stopPropagation(); // completing a task must not open the editor
           if (isCompleted) uncomplete.mutate(task.id);
-          else complete.mutate(task.id);
+          else beforeComplete(task.id, () => complete.mutate(task.id));
         }}
       >
         {isCompleted && <Check className="size-3" strokeWidth={3} />}
@@ -266,7 +279,8 @@ function TaskCard({
                 {formatDuration(task.estimate)}
               </span>
             )}
-            {task.timeUsed !== null && (
+            {/* While running, `RunningTime` shows this plus the session. */}
+            {task.timeUsed !== null && !running && (
               <span
                 className={cn(META_CHIP, "text-muted-foreground")}
                 title="Time used"
@@ -280,9 +294,11 @@ function TaskCard({
             )}
           </div>
         ) : null}
+        {running && <RunningTime estimate={task.estimate} />}
       </div>
       {!isTemp && !dragging && (
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 items-center">
+          {timeable && <TimerButton task={task} />}
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label="Task options"

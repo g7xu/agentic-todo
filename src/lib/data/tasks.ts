@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { dbDateToStr, toDbDate, todayStr } from "@/lib/date";
 import type { TaskDTO } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
+import { stopTimerOnTasks } from "@/lib/data/timers";
 
 type TaskRow = {
   id: string;
@@ -101,6 +102,17 @@ export async function listTasks(
     ...completed,
     ...completedAhead.filter((t) => !seen.has(t.id)),
   ].map(toDTO);
+}
+
+export async function getTask(
+  userId: string,
+  id: string,
+): Promise<TaskDTO | null> {
+  const t = await prisma.task.findFirst({
+    where: { id, userId },
+    select: SELECT,
+  });
+  return t ? toDTO(t) : null;
 }
 
 export type CreateTaskInput = {
@@ -258,6 +270,9 @@ export async function updateTask(
  *    earlier completion time. Completing it here would stamp the present and
  *    record every such day as made up.
  *
+ * Completing stops a timer running on the task first, recording its session
+ * (docs/TIMERS.md DT5).
+ *
  * `bulkComplete` follows the same rules.
  */
 export async function setTaskStatus(
@@ -276,6 +291,7 @@ export async function setTaskStatus(
     if (existing.status === "missed") {
       throw new Error("Missed routine days can't be completed");
     }
+    await stopTimerOnTasks(userId, [id]);
   }
 
   if (status === "active" && existing.routineId) {
@@ -391,6 +407,7 @@ export async function bulkComplete(
       .filter((id) => missedIds.has(id))
       .map((id) => ({ id, reason: "routine_day_missed" })),
   );
+  await stopTimerOnTasks(userId, applied);
   const [written] = await prisma.$transaction([
     prisma.task.updateMany({
       where: { id: { in: applied }, userId, status: "active" },

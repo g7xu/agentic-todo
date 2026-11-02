@@ -5,6 +5,7 @@ import { UserButton } from "@neondatabase/auth/react/ui";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Menu, Settings } from "lucide-react";
 import { TimezoneProvider } from "@/components/timezone-context";
+import { RunningTimerPill, TimerProvider } from "@/components/running-timer";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -63,52 +64,55 @@ export function AppShell({
 
   return (
     <TimezoneProvider tz={timezone}>
-      <DayRollover />
-      {/* h-dvh pins the shell to the viewport so `overflow-y-auto` on <main>
-          is the real scroll container — body is min-h-full and would otherwise
-          grow with content, letting pages run past the viewport bottom. */}
-      <div className="flex h-dvh flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-3 md:px-4">
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              aria-label="Open navigation"
-              onClick={() => setNavOpen(true)}
-            >
-              <Menu />
-            </Button>
-            <span className="font-semibold tracking-tight">agenticTODO</span>
+      <TimerProvider>
+        <DayRollover />
+        {/* h-dvh pins the shell to the viewport so `overflow-y-auto` on <main>
+            is the real scroll container — body is min-h-full and would otherwise
+            grow with content, letting pages run past the viewport bottom. */}
+        <div className="flex h-dvh flex-col">
+          <header className="flex h-14 shrink-0 items-center justify-between border-b px-3 md:px-4">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Open navigation"
+                onClick={() => setNavOpen(true)}
+              >
+                <Menu />
+              </Button>
+              <span className="font-semibold tracking-tight">agenticTODO</span>
+            </div>
+            <div className="flex min-w-0 items-center gap-3">
+              <RunningTimerPill />
+              <span className="text-muted-foreground hidden text-sm sm:inline">
+                {userEmail}
+              </span>
+              {/* UserButton's built-in Settings item links to
+                  `${account.basePath}/${accountViewPaths.SETTINGS}` — i.e.
+                  /account/settings, a route this app never defined, so it 404'd.
+                  Drop the default link and point one at our own /settings. */}
+              <UserButton
+                size="icon"
+                disableDefaultLinks
+                additionalLinks={[
+                  {
+                    href: "/settings",
+                    icon: <Settings />,
+                    label: "Settings",
+                    signedIn: true,
+                  },
+                ]}
+              />
+            </div>
+          </header>
+          <div className="flex flex-1 overflow-hidden">
+            <AppSidebar className="hidden md:flex" />
+            <main className="flex-1 overflow-y-auto">{children}</main>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-muted-foreground hidden text-sm sm:inline">
-              {userEmail}
-            </span>
-            {/* UserButton's built-in Settings item links to
-                `${account.basePath}/${accountViewPaths.SETTINGS}` — i.e.
-                /account/settings, a route this app never defined, so it 404'd.
-                Drop the default link and point one at our own /settings. */}
-            <UserButton
-              size="icon"
-              disableDefaultLinks
-              additionalLinks={[
-                {
-                  href: "/settings",
-                  icon: <Settings />,
-                  label: "Settings",
-                  signedIn: true,
-                },
-              ]}
-            />
-          </div>
-        </header>
-        <div className="flex flex-1 overflow-hidden">
-          <AppSidebar className="hidden md:flex" />
-          <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
-      </div>
-      <NavDrawer open={navOpen} onOpenChange={setNavOpen} />
+        <NavDrawer open={navOpen} onOpenChange={setNavOpen} />
+      </TimerProvider>
     </TimezoneProvider>
   );
 }

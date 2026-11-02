@@ -29,6 +29,9 @@ import {
   useUncompleteTask,
 } from "@/hooks/use-tasks";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
+import { useTimerControls } from "@/components/running-timer";
+import { RunningTime, TimerButton } from "@/components/timer-button";
+import { useIsRunning, useRunningOver } from "@/hooks/use-timer";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
 
 const PRIORITY_COLOR: Record<number, string> = {
@@ -67,6 +70,9 @@ export function TaskRow({
   const uncomplete = useUncompleteTask();
   const del = useDeleteTask();
   const [editing, setEditing] = useState(false);
+  const { beforeComplete } = useTimerControls();
+  const running = useIsRunning(task.id);
+  const over = useRunningOver(task.id, task.estimate);
 
   const isCompleted = task.status === "completed";
   const overdue = !isCompleted && task.dueDate !== null && task.dueDate < today;
@@ -81,10 +87,15 @@ export function TaskRow({
     task.dueDate > task.deadline;
   const project = projects.find((p) => p.id === task.projectId);
   const isTemp = task.id.startsWith("temp-");
+  const timeable = !isTemp && !isCompleted && !task.routineId; // docs/TIMERS.md DT8
 
   return (
     <div
-      className="group hover:bg-accent/40 flex cursor-pointer items-center gap-3 border-b px-3 py-2"
+      className={cn(
+        "group hover:bg-accent/40 flex cursor-pointer items-center gap-3 border-b px-3 py-2",
+        // A list row has no card border to colour, so running tints the row.
+        running && (over ? "bg-amber-500/10" : "bg-emerald-500/10"),
+      )}
       onClick={(e) => {
         // React bubbles portal events through the component tree, so clicks
         // inside the (portaled) edit dialog land here too — skip anything
@@ -99,7 +110,9 @@ export function TaskRow({
         aria-label={isCompleted ? "Mark active" : "Complete task"}
         onClick={(e) => e.stopPropagation()} // checking must not open the editor
         onCheckedChange={(checked) =>
-          checked ? complete.mutate(task.id) : uncomplete.mutate(task.id)
+          checked
+            ? beforeComplete(task.id, () => complete.mutate(task.id))
+            : uncomplete.mutate(task.id)
         }
       />
 
@@ -164,7 +177,8 @@ export function TaskRow({
                 {formatDuration(task.estimate)}
               </span>
             )}
-            {task.timeUsed !== null && (
+            {/* While running, `RunningTime` shows this plus the session. */}
+            {task.timeUsed !== null && !running && (
               <span
                 className={cn(META_CHIP, "text-muted-foreground")}
                 title="Time used"
@@ -186,10 +200,12 @@ export function TaskRow({
             )}
           </div>
         )}
+        {running && <RunningTime estimate={task.estimate} />}
       </div>
 
       {!isTemp && (
         <>
+          {timeable && <TimerButton task={task} className="p-1" />}
           <button
             aria-label="Edit task"
             className="hover:bg-accent rounded p-1 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
