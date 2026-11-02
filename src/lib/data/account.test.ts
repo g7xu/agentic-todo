@@ -14,6 +14,7 @@ const db = vi.hoisted(() => {
     oAuthCode: model("oAuthCode"),
     reviewNote: model("reviewNote"),
     review: model("review"),
+    timeEntry: model("timeEntry"),
     task: model("task"),
     routine: model("routine"),
     project: model("project"),
@@ -37,5 +38,14 @@ describe("deleteAccount", () => {
     expect(at("reviewNote")).toBeLessThan(at("review"));
     expect(at("review")).toBeLessThan(at("task"));
     expect(at("review")).toBeLessThan(at("profile"));
+  });
+
+  it("deletes time entries before the tasks and profile they reference", async () => {
+    db.calls.length = 0;
+    await deleteAccount("user-a");
+    const at = (name: string) => db.calls.indexOf(name);
+    expect(at("timeEntry")).toBeGreaterThanOrEqual(0);
+    expect(at("timeEntry")).toBeLessThan(at("task"));
+    expect(at("timeEntry")).toBeLessThan(at("profile"));
   });
 });
