@@ -51,6 +51,9 @@ provided by the identity vendor.
   REVIEWS.md DR9). Seven tools and one prompt, `weekly_review`. A review is task data, so no third
   scope; a new scope would force every existing grant back through consent. Tools take any day of
   a week and resolve its Sunday, so the model never computes week keys.
+- **DM12 — Projects can be renamed and deleted** (owner-decided 2026-11-08). Deleting runs the same
+  reassignment as the app, so a project's tasks and routines land in the Inbox. That move is the
+  only way a routine changes over MCP.
 
 ## 2. Product requirements
 

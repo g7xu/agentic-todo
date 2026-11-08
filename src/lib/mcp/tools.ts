@@ -5,7 +5,12 @@ import type {
 } from "@modelcontextprotocol/server";
 import { z, ZodError } from "zod";
 import { getTimezone } from "@/lib/data/profile";
-import { createProject, listProjects } from "@/lib/data/projects";
+import {
+  createProject,
+  deleteProjectReassign,
+  listProjects,
+  renameProject,
+} from "@/lib/data/projects";
 import {
   addNote,
   closeReview,
@@ -37,7 +42,10 @@ import { cadenceLabel } from "@/lib/repeat";
 import { MAX_CARRIED } from "@/lib/reviews";
 import type { RoutineDayDTO } from "@/lib/data/routines";
 import type { ReviewNoteDTO, TaskDTO } from "@/lib/types";
-import { projectNameSchema } from "@/lib/validation/projects";
+import {
+  idSchema as projectIdSchema,
+  projectNameSchema,
+} from "@/lib/validation/projects";
 import {
   carriedIdsSchema,
   noteContentSchema,
@@ -374,6 +382,39 @@ export function registerTools(server: McpServer): void {
     },
     (args, ctx) =>
       run(ctx, { write: true }, (userId) => createProject(userId, args.name)),
+  );
+
+  server.registerTool(
+    "update_project",
+    {
+      title: "Rename project",
+      annotations: CHANGE,
+      description: "Change a project's name. The Inbox can be renamed too.",
+      inputSchema: z.object({ id: projectIdSchema, name: projectNameSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) => {
+        if (!(await renameProject(userId, args.id, args.name))) {
+          throw new Error("Project not found");
+        }
+        return { id: args.id, name: args.name };
+      }),
+  );
+
+  server.registerTool(
+    "delete_project",
+    {
+      title: "Delete project",
+      annotations: CHANGE,
+      description:
+        "Permanently delete a project. Its tasks and routines move to the Inbox. The Inbox cannot be deleted.",
+      inputSchema: z.object({ id: projectIdSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, { write: true }, async (userId) => {
+        await deleteProjectReassign(userId, args.id);
+        return { deleted: true, id: args.id };
+      }),
   );
 
   server.registerTool(

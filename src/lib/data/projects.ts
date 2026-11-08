@@ -66,13 +66,18 @@ export async function createProject(
   return toDTO(p);
 }
 
+/** False when the user owns no project with this id. */
 export async function renameProject(
   userId: string,
   id: string,
   name: string,
-): Promise<void> {
+): Promise<boolean> {
   // Scoped to the user; Inbox may be renamed but not deleted/un-inboxed.
-  await prisma.project.updateMany({ where: { id, userId }, data: { name } });
+  const r = await prisma.project.updateMany({
+    where: { id, userId },
+    data: { name },
+  });
+  return r.count > 0;
 }
 
 /**

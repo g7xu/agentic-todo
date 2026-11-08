@@ -87,7 +87,7 @@ const DIRECTIVE = /\b(you should|you must|always|never|do not|don't|propose|ask 
 describe("MCP tool surface", () => {
   it("names every tool for a directory listing", async () => {
     const { tools } = await listTools();
-    expect(tools).toHaveLength(20);
+    expect(tools).toHaveLength(22);
     for (const t of tools) {
       expect(t.name).toMatch(/^[a-z_]+$/);
       expect(t.name.length).toBeLessThanOrEqual(64);
