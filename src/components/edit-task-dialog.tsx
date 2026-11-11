@@ -27,6 +27,7 @@ import {
   DUE_DATE_PRESETS,
 } from "@/components/date-picker";
 import { DurationPicker } from "@/components/duration-picker";
+import { AgentPanel } from "@/components/agent-panel";
 import { insertNewlineAtCursor } from "@/lib/textarea";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
 
@@ -230,6 +231,7 @@ export function EditTaskDialog({
               </Select>
             </div>
           </div>
+          <AgentPanel task={task} open={open} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

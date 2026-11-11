@@ -25,6 +25,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const SCOPE_COPY: Record<Scope, string> = {
   "tasks:read": "See your tasks, projects, routines, completion history and weekly reviews",
   "tasks:write": "Add, edit, reschedule, complete and delete tasks and projects, and write and close weekly reviews",
+  "tasks:agent": "Work the tasks you hand to it: claim them, log progress, ask you questions, finish them with a report, and suggest new tasks",
 };
 
 /**
@@ -204,10 +205,29 @@ export default async function AuthorizePage({
           )}
         </p>
 
-        <div className="mt-6 flex gap-2">
-          <form action={approveAuthorization}>
+        <div className="mt-6 flex items-end gap-2">
+          <form action={approveAuthorization} className="flex flex-col gap-3">
             <HiddenFields fields={hidden} />
-            <Button type="submit">Approve</Button>
+            {scopes.includes("tasks:write") && (
+              // Swaps tasks:write for tasks:agent (docs/AGENT-TASKS.md AT7):
+              // for a connection that runs unattended and should never edit
+              // or delete anything it was not handed.
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="agent_only"
+                  value="yes"
+                  className="mt-0.5"
+                />
+                <span>
+                  Agent hand-off only: it can work tasks you hand to it and
+                  suggest new ones, but not edit or delete anything else.
+                </span>
+              </label>
+            )}
+            <Button type="submit" className="self-start">
+              Approve
+            </Button>
           </form>
           <form action={denyAuthorization}>
             <HiddenFields fields={hidden} />

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { dbDateToStr, toDbDate, todayStr } from "@/lib/date";
-import type { TaskDTO } from "@/lib/types";
+import { AGENT_STATES, type AgentState, type TaskDTO } from "@/lib/types";
 import { getInboxId, userOwnsProject } from "@/lib/data/projects";
 import { stopTimerOnTasks } from "@/lib/data/timers";
 
@@ -19,6 +19,8 @@ type TaskRow = {
   routineId: string | null;
   completedAt: Date | null;
   createdAt: Date;
+  agentState: string | null;
+  agentQuestion: string | null;
 };
 
 const SELECT = {
@@ -36,7 +38,14 @@ const SELECT = {
   routineId: true,
   completedAt: true,
   createdAt: true,
+  agentState: true,
+  agentQuestion: true,
 } as const;
+
+/** An unknown stored value reads as null rather than leaking into the DTO. */
+function agentStateOf(v: string | null | undefined): AgentState | null {
+  return AGENT_STATES.includes(v as AgentState) ? (v as AgentState) : null;
+}
 
 function toDTO(t: TaskRow): TaskDTO {
   return {
@@ -57,6 +66,8 @@ function toDTO(t: TaskRow): TaskDTO {
     routineId: t.routineId,
     completedAt: t.completedAt ? t.completedAt.toISOString() : null,
     createdAt: t.createdAt.toISOString(),
+    agentState: agentStateOf(t.agentState),
+    agentQuestion: t.agentQuestion ?? null,
   };
 }
 
@@ -126,9 +137,15 @@ export type CreateTaskInput = {
   projectId?: string | null;
 };
 
+/**
+ * `opts.suggestedByAgent` marks a task the agent proposed (docs/AGENT-TASKS.md
+ * AT6). It is not part of `CreateTaskInput` so that no form or tool schema can
+ * set a hand-off state directly.
+ */
 export async function createTask(
   userId: string,
   input: CreateTaskInput,
+  opts: { suggestedByAgent?: boolean } = {},
 ): Promise<TaskDTO> {
   // Resolve project: verify ownership, else default to Inbox (TDD §6.2/§7).
   let projectId = input.projectId ?? null;
@@ -159,6 +176,7 @@ export async function createTask(
       estimate: input.estimate ?? null,
       timeUsed: input.timeUsed ?? null,
       order,
+      agentState: opts.suggestedByAgent ? "suggested" : null,
     },
     select: SELECT,
   });

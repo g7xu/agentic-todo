@@ -54,6 +54,12 @@ provided by the identity vendor.
 - **DM12 — Projects can be renamed and deleted** (owner-decided 2026-11-08). Deleting runs the same
   reassignment as the app, so a project's tasks and routines land in the Inbox. That move is the
   only way a routine changes over MCP.
+- **DM13 — Agent hand-off and a third scope, `tasks:agent`** (proposed 2026-11-11,
+  [AGENT-TASKS.md](./AGENT-TASKS.md)). Seven tools let a scheduled agent claim, work, question,
+  release and finish the tasks the user hands to it, and suggest new ones; `list_tasks` filters by
+  `agentState`. `tasks:agent` covers only those tools; consent offers it in place of
+  `tasks:write`. Existing grants keep working unchanged: write already allows the hand-off, and a
+  request without `scope` still gets read and write.
 
 ## 2. Product requirements
 
@@ -65,8 +71,9 @@ provided by the identity vendor.
 - See and revoke connected apps in Settings.
 
 ### Non-goals
-- A chat UI inside the app. A local stdio server. Routine editing via MCP. Scheduled agent runs
-  (AGENT.md §5.3 trigger remains unmet).
+- A chat UI inside the app. A local stdio server. Routine editing via MCP. Running a scheduler
+  inside the app: scheduled agent runs live on the agent's side and use the hand-off tools
+  (AGENT-TASKS.md).
 
 ### Behaviour
 - **Connect.** In claude.ai: Customize → Connectors → Add custom connector →

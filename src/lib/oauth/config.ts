@@ -33,10 +33,29 @@ export function resourceUrl(): string {
   return `${issuer()}/api/mcp`;
 }
 
-export const SCOPES = ["tasks:read", "tasks:write"] as const;
+/**
+ * `tasks:agent` is the agent hand-off alone (docs/AGENT-TASKS.md AT7): claim,
+ * log, ask, release, finish and suggest, with no general edits and no
+ * deletes. Everything it allows, `tasks:write` allows too, so swapping write
+ * for agent on the consent page only ever narrows a grant.
+ */
+export const SCOPES = ["tasks:read", "tasks:write", "tasks:agent"] as const;
 export type Scope = (typeof SCOPES)[number];
-/** Every grant carries the full set in v1; consent has no partial option. */
 export const SCOPE_STRING: string = SCOPES.join(" ");
+/** What a request that names no scope gets: full access, as before tasks:agent existed. */
+export const DEFAULT_SCOPES: readonly Scope[] = ["tasks:read", "tasks:write"];
+
+/**
+ * The scopes granted when the user ticks "agent hand-off only" on the
+ * consent page: `tasks:write` is replaced by `tasks:agent`. A request
+ * without write is returned unchanged.
+ */
+export function narrowToAgent(scopes: readonly Scope[]): Scope[] {
+  if (!scopes.includes("tasks:write")) return [...scopes];
+  const out = scopes.filter((s) => s !== "tasks:write");
+  if (!out.includes("tasks:agent")) out.push("tasks:agent");
+  return out;
+}
 
 export const CODE_TTL_MS = 10 * 60 * 1000;
 export const ACCESS_TTL_S = 60 * 60;

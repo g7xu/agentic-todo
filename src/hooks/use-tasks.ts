@@ -80,6 +80,8 @@ export function useCreateTask() {
         routineId: null,
         completedAt: null,
         createdAt: new Date().toISOString(),
+        agentState: null,
+        agentQuestion: null,
       };
       const prev = patch(qc, (tasks) => [...tasks, optimistic]);
       return { prev };

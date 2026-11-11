@@ -18,6 +18,7 @@ import type { ConnectedAppDTO } from "@/lib/types";
 const SCOPE_LABEL: Record<string, string> = {
   "tasks:read": "read",
   "tasks:write": "write",
+  "tasks:agent": "agent hand-off",
 };
 
 function formatDay(iso: string | null): string {

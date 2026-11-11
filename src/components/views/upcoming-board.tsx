@@ -58,6 +58,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AgentChip } from "@/components/agent-chip";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import { useTimerControls } from "@/components/running-timer";
 import {
@@ -238,6 +239,7 @@ function TaskCard({
         task.deadline !== null ||
         task.estimate !== null ||
         task.timeUsed !== null ||
+        task.agentState !== null ||
         (project && !project.isInbox) ? (
           <div className={META_ROW}>
             {isRoutine && (
@@ -289,6 +291,7 @@ function TaskCard({
                 {formatDuration(task.timeUsed)}
               </span>
             )}
+            <AgentChip task={task} />
             {project && !project.isInbox && (
               <span className={PROJECT_CHIP}># {project.name}</span>
             )}

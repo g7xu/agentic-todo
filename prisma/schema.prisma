@@ -33,6 +33,7 @@ model Profile {
   reviews       Review[]
   reviewNotes   ReviewNote[]
   timeEntries   TimeEntry[]
+  activities    TaskActivity[]
 
   @@map("profiles")
 }
@@ -95,12 +96,23 @@ model Task {
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6) /// maintained by Prisma, no DB trigger
+  /// Hand-off to an agent (docs/AGENT-TASKS.md). Null for an ordinary task the
+  /// agent leaves alone; otherwise 'suggested' | 'ready' | 'working' |
+  /// 'needs_input' | 'done'.
+  agentState     String?   @map("agent_state")
+  /// The one question the agent is waiting on; set only in 'needs_input'.
+  agentQuestion  String?   @map("agent_question")
+  /// Who holds the task while it is 'working': the id handed to the run that
+  /// claimed it, and when another run may take it over (AT3).
+  claimId        String?   @map("claim_id") @db.Uuid
+  claimExpiresAt DateTime? @map("claim_expires_at") @db.Timestamptz(6)
 
   user        Profile      @relation(fields: [userId], references: [id])
   project     Project      @relation(fields: [projectId], references: [id])
   routine     Routine?     @relation("RoutineInstances", fields: [routineId], references: [id], onDelete: SetNull)
   reviewNotes ReviewNote[] /// review actions this task was carried from (docs/REVIEWS.md)
   timeEntries TimeEntry[]
+  activities  TaskActivity[]
 
   // Idempotency guard for routine materialization: at most one instance per
   // routine per day. NULLs are distinct in Postgres, so ordinary tasks
@@ -108,7 +120,28 @@ model Task {
   @@unique([routineId, dueDate])
   @@index([userId, dueDate, status])
   @@index([userId, projectId, order])
+  @@index([userId, agentState])
   @@map("tasks")
+}
+
+/// The agent's log on a task and the user's answers to it (docs/AGENT-TASKS.md
+/// AT5). Append-only: the agent reports here instead of overwriting the
+/// task's description, which stays the user's.
+model TaskActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  taskId    String   @map("task_id") @db.Uuid
+  author    String /// 'agent' | 'user'
+  kind      String /// 'progress' | 'question' | 'answer' | 'report' | 'released'
+  content   String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id])
+  task Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([userId])
+  @@map("task_activities")
 }
 
 /// One stretch of timed work on a task (docs/TIMERS.md). A null `endedAt` is

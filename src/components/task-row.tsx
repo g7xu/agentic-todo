@@ -28,6 +28,7 @@ import {
   useDeleteTask,
   useUncompleteTask,
 } from "@/hooks/use-tasks";
+import { AgentChip } from "@/components/agent-chip";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import { useTimerControls } from "@/components/running-timer";
 import { RunningTime, TimerButton } from "@/components/timer-button";
@@ -134,6 +135,7 @@ export function TaskRow({
           task.estimate !== null ||
           task.timeUsed !== null ||
           task.routineId ||
+          task.agentState ||
           (showProject && project && !project.isInbox)) && (
           <div className={META_ROW}>
             {task.dueDate && (
@@ -195,6 +197,7 @@ export function TaskRow({
                 <Repeat className="size-3" />
               </span>
             )}
+            <AgentChip task={task} />
             {showProject && project && !project.isInbox && (
               <span className={PROJECT_CHIP}># {project.name}</span>
             )}

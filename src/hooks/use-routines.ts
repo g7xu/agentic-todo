@@ -167,6 +167,8 @@ export function useCompleteRoutineOccurrence() {
         routineId: routine.id,
         completedAt: now,
         createdAt: now,
+        agentState: null,
+        agentQuestion: null,
       };
       const prev = qc.getQueryData<TaskDTO[]>(TASKS_KEY);
       qc.setQueryData<TaskDTO[]>(TASKS_KEY, (old = []) => [...old, standIn]);

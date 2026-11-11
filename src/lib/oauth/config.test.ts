@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { issuer, resourceUrl } from "@/lib/oauth/config";
+import { issuer, narrowToAgent, resourceUrl } from "@/lib/oauth/config";
 
 const saved = { ...process.env };
 function setEnv(vars: Record<string, string | undefined>) {
@@ -30,5 +30,19 @@ describe("issuer", () => {
   it("falls back to localhost in development", () => {
     setEnv({ NODE_ENV: "development" });
     expect(issuer()).toBe("http://localhost:3000");
+  });
+});
+
+describe("narrowToAgent", () => {
+  it("swaps write for the agent hand-off", () => {
+    expect(narrowToAgent(["tasks:read", "tasks:write"])).toEqual(["tasks:read", "tasks:agent"]);
+    expect(narrowToAgent(["tasks:read", "tasks:write", "tasks:agent"])).toEqual([
+      "tasks:read",
+      "tasks:agent",
+    ]);
+  });
+
+  it("never adds to a grant without write", () => {
+    expect(narrowToAgent(["tasks:read"])).toEqual(["tasks:read"]);
   });
 });
