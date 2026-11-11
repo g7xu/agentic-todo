@@ -4,6 +4,16 @@ import type {
   ServerContext,
 } from "@modelcontextprotocol/server";
 import { z, ZodError } from "zod";
+import {
+  AGENT_ERRORS,
+  claimTask,
+  finishTask,
+  listTaskActivity,
+  logProgress,
+  MAX_LEASE_MIN,
+  releaseTask,
+  requestInput,
+} from "@/lib/data/agent-tasks";
 import { getTimezone } from "@/lib/data/profile";
 import {
   createProject,
@@ -33,6 +43,7 @@ import {
   bulkReschedule,
   createTask,
   deleteTask,
+  getTask,
   listTasks,
   setTaskStatus,
   updateTask,
@@ -41,7 +52,7 @@ import { addDays, diffDays, startOfWeek, todayStr } from "@/lib/date";
 import { cadenceLabel } from "@/lib/repeat";
 import { MAX_CARRIED } from "@/lib/reviews";
 import type { RoutineDayDTO } from "@/lib/data/routines";
-import type { ReviewNoteDTO, TaskDTO } from "@/lib/types";
+import { AGENT_STATES, type ReviewNoteDTO, type TaskDTO } from "@/lib/types";
 import {
   idSchema as projectIdSchema,
   projectNameSchema,
@@ -78,9 +89,12 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - All dates are YYYY-MM-DD in the user's own timezone, which list_tasks reports as "today" and "timezone".
 - Weekly reviews are boards keyed by the Sunday that starts the week. Notes sit in the unsorted pile or in one of four columns: thorn (what stung), rose (what went well), seed (worth trying), action (what to do next).
 - Closing a week makes its board read-only, turns up to ${MAX_CARRIED} chosen action notes into Inbox tasks planned for the next Sunday, and moves unsorted notes to the next open week. There is no reopen.
-- Writes take effect immediately; the server keeps no drafts and has no undo.`;
+- Writes take effect immediately; the server keeps no drafts and has no undo.
+- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
 
 const WRITE_SCOPE = "tasks:write";
+/** The hand-off tools alone: no general edits and no deletes (docs/AGENT-TASKS.md AT7). */
+const AGENT_SCOPE = "tasks:agent";
 const MAX_BULK_IDS = 100;
 
 /**
@@ -94,6 +108,8 @@ const MAX_BULK_IDS = 100;
 const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
 const CHANGE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
+/** Hand-off moves: they change only the agent's own state and log, never the user's fields. */
+const HANDOFF = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const;
 
 /**
  * Messages the data layer throws for conditions the model can act on. Only
@@ -112,6 +128,7 @@ const EXPECTED_DATA_ERRORS = new Set([
   "Review not found",
   REVIEW_CLOSED,
   "Only this week's action notes can be carried",
+  ...Object.values(AGENT_ERRORS),
 ]);
 
 /** A message composed inside a tool handler for the model to read. */
@@ -143,13 +160,20 @@ function fail(message: string): CallToolResult {
  */
 async function run(
   ctx: ServerContext,
-  opts: { write?: boolean },
+  opts: { write?: boolean; agent?: boolean },
   body: (userId: string) => Promise<unknown>,
 ): Promise<CallToolResult> {
   try {
     const { userId, scopes } = principal(ctx);
     if (opts.write && !scopes.includes(WRITE_SCOPE)) {
-      return fail(`This connection is read-only: the ${WRITE_SCOPE} scope was not granted.`);
+      return fail(
+        scopes.includes(AGENT_SCOPE)
+          ? `This connection may only use the agent hand-off tools: the ${WRITE_SCOPE} scope was not granted.`
+          : `This connection is read-only: the ${WRITE_SCOPE} scope was not granted.`,
+      );
+    }
+    if (opts.agent && !scopes.includes(WRITE_SCOPE) && !scopes.includes(AGENT_SCOPE)) {
+      return fail(`This connection is read-only: neither ${AGENT_SCOPE} nor ${WRITE_SCOPE} was granted.`);
     }
     return ok(await body(userId));
   } catch (e) {
@@ -220,9 +244,11 @@ export function registerTools(server: McpServer): void {
       title: "List tasks",
       annotations: READ,
       description:
-        "Active tasks plus recently completed ones, with today's date and the user's timezone. Filter with status.",
+        "Active tasks plus recently completed ones, with today's date and the user's timezone. Filter with status, projectId, or agentState (\"ready\" lists the tasks handed to the agent and waiting).",
       inputSchema: z.object({
         status: z.enum(["active", "completed"]).optional(),
+        projectId: projectIdSchema.optional(),
+        agentState: z.enum(AGENT_STATES as [string, ...string[]]).optional(),
       }),
     },
     (args, ctx) =>
@@ -237,9 +263,12 @@ export function registerTools(server: McpServer): void {
           console.error("recordMissedDays failed:", e);
         }
         const tasks = await listTasks(userId, today);
-        const filtered = args.status
-          ? tasks.filter((t) => t.status === args.status)
-          : tasks;
+        const filtered = tasks.filter(
+          (t) =>
+            (!args.status || t.status === args.status) &&
+            (!args.projectId || t.projectId === args.projectId) &&
+            (!args.agentState || t.agentState === args.agentState),
+        );
         return { today, timezone, tasks: filtered.map(compactTask) };
       }),
   );
@@ -359,6 +388,127 @@ export function registerTools(server: McpServer): void {
     },
     (args, ctx) =>
       run(ctx, { write: true }, (userId) => bulkDelete(userId, args.ids)),
+  );
+
+  server.registerTool(
+    "get_task",
+    {
+      title: "Get task",
+      annotations: READ,
+      description:
+        "One task with its agent log: progress notes, questions, the user's answers and reports, oldest first.",
+      inputSchema: z.object({ id: taskIdSchema }),
+    },
+    (args, ctx) =>
+      run(ctx, {}, async (userId) => {
+        const task = await getTask(userId, args.id);
+        if (!task) throw new Error("Task not found");
+        return { task: compactTask(task), log: await listTaskActivity(userId, args.id) };
+      }),
+  );
+
+  server.registerTool(
+    "claim_task",
+    {
+      title: "Claim task",
+      annotations: HANDOFF,
+      description: `Claim a task handed to the agent so no other run works it. Without id, claims the next ready task by priority, deadline and planned date; returns claimed: null when none is waiting. The result carries the claimId the other hand-off tools require, when the claim lapses (leaseMinutes, default 30, at most ${MAX_LEASE_MIN}), and the task's recent log. A lapsed claim may be taken over by another run.`,
+      inputSchema: z.object({
+        id: taskIdSchema.optional(),
+        leaseMinutes: z.number().int().min(1).max(MAX_LEASE_MIN).optional(),
+      }),
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, async (userId) => {
+        const claimed = await claimTask(userId, args);
+        if (!claimed) return { claimed: null };
+        return { claimed: { ...claimed, task: compactTask(claimed.task) } };
+      }),
+  );
+
+  const claimInput = {
+    id: taskIdSchema,
+    claimId: z.string().uuid().describe("The claimId claim_task returned."),
+  };
+  const logText = z.string().trim().min(1).max(10000);
+
+  server.registerTool(
+    "log_task_progress",
+    {
+      title: "Log task progress",
+      annotations: HANDOFF,
+      description:
+        "Add a progress note to a claimed task's log and renew its claim for leaseMinutes (default 30).",
+      inputSchema: z.object({
+        ...claimInput,
+        note: logText,
+        leaseMinutes: z.number().int().min(1).max(MAX_LEASE_MIN).optional(),
+      }),
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, (userId) =>
+        logProgress(userId, args.id, args.claimId, args.note, args.leaseMinutes),
+      ),
+  );
+
+  server.registerTool(
+    "request_input",
+    {
+      title: "Ask the user",
+      annotations: HANDOFF,
+      description:
+        "Set a claimed task to needs_input with one question for the user and release the claim. The user's answer appears in the log and the task returns to ready.",
+      inputSchema: z.object({ ...claimInput, question: z.string().trim().min(1).max(2000) }),
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, async (userId) =>
+        compactTask(await requestInput(userId, args.id, args.claimId, args.question)),
+      ),
+  );
+
+  server.registerTool(
+    "release_task",
+    {
+      title: "Release task",
+      annotations: HANDOFF,
+      description:
+        "Put a claimed task back to ready without finishing it, with an optional note for the next run.",
+      inputSchema: z.object({ ...claimInput, note: logText.optional() }),
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, async (userId) =>
+        compactTask(await releaseTask(userId, args.id, args.claimId, args.note)),
+      ),
+  );
+
+  server.registerTool(
+    "finish_task",
+    {
+      title: "Finish task",
+      annotations: CHANGE,
+      description:
+        "Complete a claimed task and add the report to its log: what was done, the answer, and links to anything made. The task's description is left unchanged.",
+      inputSchema: z.object({ ...claimInput, report: logText }),
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, async (userId) =>
+        compactTask(await finishTask(userId, args.id, args.claimId, args.report)),
+      ),
+  );
+
+  server.registerTool(
+    "suggest_task",
+    {
+      title: "Suggest task",
+      annotations: ADD,
+      description:
+        "Create a task marked as suggested by the agent. It is not claimable until the user hands it over. Same fields as create_task.",
+      inputSchema: createTaskSchema,
+    },
+    (args, ctx) =>
+      run(ctx, { agent: true }, async (userId) =>
+        compactTask(await createTask(userId, args, { suggestedByAgent: true })),
+      ),
   );
 
   server.registerTool(

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCOPES, type Scope } from "@/lib/oauth/config";
+import { DEFAULT_SCOPES, SCOPES, type Scope } from "@/lib/oauth/config";
 import { OAuthError } from "@/lib/oauth/errors";
 import { isValidCodeChallenge } from "@/lib/oauth/pkce";
 
@@ -42,12 +42,13 @@ export function parseAuthorizeRequest(params: Params): AuthorizeRequest {
 
 /**
  * Scopes the client asked for, as a subset of SCOPES. An absent `scope`
- * means everything. `offline_access` is dropped rather than rejected because
+ * means DEFAULT_SCOPES: full access, to which `tasks:agent` would add
+ * nothing. `offline_access` is dropped rather than rejected because
  * clients add it whenever an authorization server lists it, and refresh
  * tokens are issued unconditionally here.
  */
 export function parseRequestedScopes(scope: string | undefined): Scope[] {
-  if (scope === undefined || scope.trim() === "") return [...SCOPES];
+  if (scope === undefined || scope.trim() === "") return [...DEFAULT_SCOPES];
   const known = new Set<string>(SCOPES);
   const out: Scope[] = [];
   for (const s of scope.split(/\s+/).filter(Boolean)) {
@@ -57,6 +58,6 @@ export function parseRequestedScopes(scope: string | undefined): Scope[] {
     }
     if (!out.includes(s as Scope)) out.push(s as Scope);
   }
-  if (out.length === 0) return [...SCOPES];
+  if (out.length === 0) return [...DEFAULT_SCOPES];
   return out;
 }

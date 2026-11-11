@@ -3,6 +3,32 @@
  * by the Activity grid alone. */
 export type TaskStatus = "active" | "completed" | "missed";
 
+/** Where a task stands in the hand-off to an agent (docs/AGENT-TASKS.md).
+ * Null on a task the agent leaves alone. */
+export type AgentState =
+  | "suggested" // the agent proposed it; it waits for the user to hand it over
+  | "ready" // handed to the agent, waiting for a run to claim it
+  | "working" // claimed by one run
+  | "needs_input" // the agent asked the user a question
+  | "done"; // the agent finished and reported
+
+export const AGENT_STATES: readonly AgentState[] = [
+  "suggested",
+  "ready",
+  "working",
+  "needs_input",
+  "done",
+];
+
+/** One entry of a task's agent log (AT5). */
+export type TaskActivityDTO = {
+  id: string;
+  author: "agent" | "user";
+  kind: "progress" | "question" | "answer" | "report" | "released";
+  content: string;
+  createdAt: string;
+};
+
 /** Client-facing task shape. Dates are strings: `dueDate`/`deadline` are
  * calendar dates ('YYYY-MM-DD'), `completedAt`/`createdAt` are ISO timestamps. */
 export type TaskDTO = {
@@ -20,6 +46,8 @@ export type TaskDTO = {
   routineId: string | null; // set when this row records a routine day's outcome
   completedAt: string | null;
   createdAt: string;
+  agentState: AgentState | null;
+  agentQuestion: string | null; // set only while agentState is 'needs_input'
 };
 
 export type RoutineRepeatBase = "scheduled" | "completed";

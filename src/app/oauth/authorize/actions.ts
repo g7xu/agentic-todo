@@ -8,10 +8,13 @@ import {
   parseRequestedScopes,
   type AuthorizeRequest,
 } from "@/lib/oauth/authorize-request";
-import { resourceUrl } from "@/lib/oauth/config";
+import { narrowToAgent, resourceUrl } from "@/lib/oauth/config";
 import { OAuthError } from "@/lib/oauth/errors";
 import { appendParams, redirectUriAllowed } from "@/lib/oauth/redirect-uri";
 import { createCode, getClient } from "@/lib/oauth/store";
+
+/** The consent page's "agent hand-off only" checkbox. */
+const AGENT_ONLY_FIELD = "agent_only";
 
 /**
  * The consent decision. This path sits outside the proxy's protection and
@@ -38,8 +41,11 @@ async function validatedRequest(
     throw new OAuthError("invalid_target", "resource does not name this server");
   }
   // What the client asked for is what it gets, never more (RFC 6749 §3.3).
-  const scope = parseRequestedScopes(request.scope).join(" ");
-  return { request, scope };
+  // The user may narrow it to the agent hand-off (docs/AGENT-TASKS.md AT7).
+  const requested = parseRequestedScopes(request.scope);
+  const granted =
+    formData.get(AGENT_ONLY_FIELD) === "yes" ? narrowToAgent(requested) : requested;
+  return { request, scope: granted.join(" ") };
 }
 
 export async function approveAuthorization(formData: FormData): Promise<void> {

@@ -70,6 +70,7 @@ async function listTools() {
 
 const READ_TOOLS = [
   "list_tasks",
+  "get_task",
   "list_projects",
   "list_routines",
   "get_routine_history",
@@ -77,7 +78,9 @@ const READ_TOOLS = [
   "get_review",
 ];
 /** The only writes that never overwrite or remove an existing row. */
-const ADDITIVE_TOOLS = ["create_task", "create_project", "add_review_note"];
+const ADDITIVE_TOOLS = ["create_task", "create_project", "add_review_note", "suggest_task"];
+/** Hand-off moves change only the agent's own state and log (docs/AGENT-TASKS.md). */
+const HANDOFF_TOOLS = ["claim_task", "log_task_progress", "request_input", "release_task"];
 
 /** Phrases that read as instructions to the model rather than facts about
  * the data. The connector directory rejects descriptions that steer the
@@ -87,7 +90,7 @@ const DIRECTIVE = /\b(you should|you must|always|never|do not|don't|propose|ask 
 describe("MCP tool surface", () => {
   it("names every tool for a directory listing", async () => {
     const { tools } = await listTools();
-    expect(tools).toHaveLength(22);
+    expect(tools).toHaveLength(29);
     for (const t of tools) {
       expect(t.name).toMatch(/^[a-z_]+$/);
       expect(t.name.length).toBeLessThanOrEqual(64);
@@ -108,7 +111,9 @@ describe("MCP tool surface", () => {
         expect(a.destructiveHint, t.name).toBe(false);
       } else {
         expect(a.readOnlyHint, t.name).toBe(false);
-        expect(a.destructiveHint, t.name).toBe(!ADDITIVE_TOOLS.includes(t.name));
+        expect(a.destructiveHint, t.name).toBe(
+          !ADDITIVE_TOOLS.includes(t.name) && !HANDOFF_TOOLS.includes(t.name),
+        );
       }
     }
   });
