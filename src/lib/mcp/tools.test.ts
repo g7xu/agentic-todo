@@ -87,16 +87,59 @@ const HANDOFF_TOOLS = ["claim_task", "log_task_progress", "request_input", "rele
  * model. */
 const DIRECTIVE = /\b(you should|you must|always|never|do not|don't|propose|ask the user|confirm with)\b/i;
 
+/**
+ * Every tool of the 29-tool surface (PR #65) and the tool that now does its
+ * job (docs/MCP-TOOLS-MAP.md). A capability can move but must not vanish.
+ */
+const OLD_TO_NEW: Record<string, string> = {
+  list_tasks: "list_tasks",
+  create_task: "create_task",
+  update_task: "update_task",
+  complete_task: "complete_tasks",
+  bulk_complete: "complete_tasks",
+  uncomplete_task: "reopen_task",
+  delete_task: "delete_tasks",
+  bulk_delete: "delete_tasks",
+  bulk_reschedule: "reschedule_tasks",
+  get_task: "get_task",
+  claim_task: "claim_task",
+  log_task_progress: "log_task_progress",
+  request_input: "request_input",
+  release_task: "release_task",
+  finish_task: "finish_task",
+  suggest_task: "suggest_task",
+  list_projects: "list_projects",
+  create_project: "create_project",
+  update_project: "rename_project",
+  delete_project: "delete_project",
+  list_routines: "list_routines",
+  get_routine_history: "get_routine_history",
+  list_reviews: "list_reviews",
+  get_review: "get_review",
+  add_review_note: "add_review_note",
+  update_review_note: "update_review_note",
+  move_review_note: "update_review_note",
+  delete_review_note: "delete_review_note",
+  close_review: "close_review",
+};
+
 describe("MCP tool surface", () => {
   it("names every tool for a directory listing", async () => {
     const { tools } = await listTools();
-    expect(tools).toHaveLength(29);
+    expect(tools).toHaveLength(26);
     for (const t of tools) {
       expect(t.name).toMatch(/^[a-z_]+$/);
       expect(t.name.length).toBeLessThanOrEqual(64);
       expect(t.title, t.name).toBeTruthy();
       expect(t.description, t.name).toBeTruthy();
     }
+  });
+
+  it("keeps every capability of the earlier surface", async () => {
+    const { tools } = await listTools();
+    const names = tools.map((t) => t.name).sort();
+    expect(Object.keys(OLD_TO_NEW)).toHaveLength(29);
+    expect([...new Set(Object.values(OLD_TO_NEW))].sort()).toEqual(names);
   });
 
   it("annotates every tool with readOnlyHint and destructiveHint", async () => {

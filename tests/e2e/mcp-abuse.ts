@@ -203,12 +203,14 @@ async function crossTenant() {
   // --- single-task writes by B on owner's task ---
   for (const [tool, args] of [
     ["update_task", { id: ownerTaskId, content: "[abuse] HIJACKED BY B" }],
-    ["complete_task", { id: ownerTaskId }],
-    ["uncomplete_task", { id: ownerTaskId }],
-    ["delete_task", { id: ownerTaskId }],
+    ["complete_tasks", { ids: [ownerTaskId] }],
+    ["reopen_task", { id: ownerTaskId }],
+    ["delete_tasks", { ids: [ownerTaskId] }],
   ] as [string, any][]) {
     const r = await call(USERB.tokens.valid.access, tool, args);
-    const denied = isToolError(r) || r.status >= 400;
+    // The id-list tools answer a foreign id with skipped: not_found, not an error.
+    const skipped = (toolData(r)?.skipped ?? []).some((x: any) => x?.id === ownerTaskId && x?.reason === "not_found");
+    const denied = isToolError(r) || r.status >= 400 || (skipped && (toolData(r)?.applied ?? []).length === 0);
     record(
       `B ${tool} on owner task -> rejected`,
       denied,
@@ -233,47 +235,47 @@ async function crossTenant() {
     const d = toolData(r);
     return d?.id ?? null;
   }
-  const bBulkComplete = await makeBTask("bulk_complete victim");
-  const bBulkDelete = await makeBTask("bulk_delete victim");
-  const bBulkResched = await makeBTask("bulk_reschedule victim");
+  const bBulkComplete = await makeBTask("complete_tasks victim");
+  const bBulkDelete = await makeBTask("delete_tasks victim");
+  const bBulkResched = await makeBTask("reschedule_tasks victim");
 
-  // bulk_complete mix
+  // complete_tasks mix
   if (bBulkComplete) {
-    const r = await call(USERB.tokens.valid.access, "bulk_complete", { ids: [bBulkComplete, ownerTaskId] });
+    const r = await call(USERB.tokens.valid.access, "complete_tasks", { ids: [bBulkComplete, ownerTaskId] });
     const ownerAfter = (await listTasks(OWNER.tokens.valid.access)).find((t) => t.id === ownerTaskId);
     const bCompleted = (await listTasks(USERB.tokens.valid.access, "completed")).some((t) => t.id === bBulkComplete);
     const ok = ownerAfter?.status === baseStatus && bCompleted;
     record(
-      "bulk_complete [B-own, owner] -> owner skipped, B processed",
+      "complete_tasks [B-own, owner] -> owner skipped, B processed",
       ok,
       `resp=${excerpt(toolText(r))} | owner.status=${ownerAfter?.status} B-own completed=${bCompleted}`
     );
   }
 
-  // bulk_delete mix
+  // delete_tasks mix
   if (bBulkDelete) {
-    const r = await call(USERB.tokens.valid.access, "bulk_delete", { ids: [bBulkDelete, ownerTaskId] });
+    const r = await call(USERB.tokens.valid.access, "delete_tasks", { ids: [bBulkDelete, ownerTaskId] });
     const ownerStill = (await listTasks(OWNER.tokens.valid.access)).some((t) => t.id === ownerTaskId);
     const bActive = (await listTasks(USERB.tokens.valid.access)).some((t) => t.id === bBulkDelete);
     const bDone = (await listTasks(USERB.tokens.valid.access, "completed")).some((t) => t.id === bBulkDelete);
     const bGone = !bActive && !bDone;
     record(
-      "bulk_delete [B-own, owner] -> owner survives, B's own deleted",
+      "delete_tasks [B-own, owner] -> owner survives, B's own deleted",
       ownerStill && bGone,
       `resp=${excerpt(toolText(r))} | owner still present=${ownerStill} B-own gone=${bGone}`
     );
   }
 
-  // bulk_reschedule mix
+  // reschedule_tasks mix
   if (bBulkResched) {
     const target = "2026-12-25";
-    const r = await call(USERB.tokens.valid.access, "bulk_reschedule", { ids: [bBulkResched, ownerTaskId], dueDate: target });
+    const r = await call(USERB.tokens.valid.access, "reschedule_tasks", { ids: [bBulkResched, ownerTaskId], dueDate: target });
     const ownerAfter = (await listTasks(OWNER.tokens.valid.access)).find((t) => t.id === ownerTaskId);
     const bAfter = (await listTasks(USERB.tokens.valid.access)).find((t) => t.id === bBulkResched);
     const ownerUntouched = (ownerAfter?.dueDate ?? null) === baseDue;
     const bMoved = bAfter?.dueDate === target;
     record(
-      "bulk_reschedule [B-own, owner] -> owner date untouched, B moved",
+      "reschedule_tasks [B-own, owner] -> owner date untouched, B moved",
       ownerUntouched && bMoved,
       `resp=${excerpt(toolText(r))} | owner.dueDate=${ownerAfter?.dueDate ?? null} (baseline ${baseDue}) B.dueDate=${bAfter?.dueDate}`
     );
@@ -310,7 +312,7 @@ async function crossTenant() {
       `isError=${isToolError(rMove)} returnedProjectId=${moveData?.projectId} appearsInOwnerList=${nowInOwner} body=${excerpt(toolText(rMove))}`
     );
     // cleanup B's movable task
-    await call(USERB.tokens.valid.access, "delete_task", { id: bMovable });
+    await call(USERB.tokens.valid.access, "delete_tasks", { ids: [bMovable] });
   }
 
   // --- Read isolation: B and C must never see owner rows ---
@@ -346,9 +348,9 @@ async function crossTenant() {
     );
   }
 
-  // cleanup B's leftover bulk tasks that may still exist (bulk_complete victim)
+  // cleanup B's leftover bulk tasks that may still exist (complete_tasks victim)
   for (const id of [bBulkComplete, bBulkResched]) {
-    if (id) await call(USERB.tokens.valid.access, "delete_task", { id });
+    if (id) await call(USERB.tokens.valid.access, "delete_tasks", { ids: [id] });
   }
 }
 
@@ -843,15 +845,15 @@ async function inputAbuse() {
 
   // ids arrays of 101 and 0
   const big = Array.from({ length: 101 }, () => "11111111-1111-4111-8111-111111111111");
-  const rBig = await call(T, "bulk_complete", { ids: big });
+  const rBig = await call(T, "complete_tasks", { ids: big });
   record(
-    "bulk_complete ids[101] -> rejected (>100), no 500",
+    "complete_tasks ids[101] -> rejected (>100), no 500",
     noServerError(rBig) && (rBig.json?.error || isToolError(rBig)),
     `status=${rBig.status} body=${excerpt(toolText(rBig), 100)}`
   );
-  const rZero = await call(T, "bulk_complete", { ids: [] });
+  const rZero = await call(T, "complete_tasks", { ids: [] });
   record(
-    "bulk_complete ids[0] -> rejected (minItems), no 500",
+    "complete_tasks ids[0] -> rejected (minItems), no 500",
     noServerError(rZero) && (rZero.json?.error || isToolError(rZero)),
     `status=${rZero.status} body=${excerpt(toolText(rZero), 100)}`
   );
@@ -993,10 +995,10 @@ async function extras() {
   // Another user's VALID token used against owner data is already covered; here:
   // owner's token must not be able to delete-by-guessing userB's fixture task id
   // (i.e. owner is also isolated FROM userB).
-  const rOwnerHitsB = await call(T, "delete_task", { id: USERB.taskId });
+  const rOwnerHitsB = await call(T, "delete_tasks", { ids: [USERB.taskId] });
   record(
     "owner cannot delete userB's task id (isolation is symmetric)",
-    isToolError(rOwnerHitsB) || rOwnerHitsB.status >= 400,
+    isToolError(rOwnerHitsB) || rOwnerHitsB.status >= 400 || (toolData(rOwnerHitsB)?.applied ?? ["?"]).length === 0,
     `status=${rOwnerHitsB.status} isError=${isToolError(rOwnerHitsB)} body=${excerpt(toolText(rOwnerHitsB), 100)}`
   );
   // Confirm B's task still exists for B.
@@ -1037,8 +1039,8 @@ async function cleanup() {
   }
   let deleted = 0;
   for (const id of seen) {
-    const r = await call(T, "delete_task", { id });
-    if (!isToolError(r)) deleted++;
+    const r = await call(T, "delete_tasks", { ids: [id] });
+    if ((toolData(r)?.applied ?? []).includes(id)) deleted++;
   }
   console.log(`        deleted ${deleted}/${seen.size} [abuse] owner tasks`);
   if (createdProjects.length) console.log(`        note: ${createdProjects.length} [abuse] project(s) created (no delete tool exposed)`);

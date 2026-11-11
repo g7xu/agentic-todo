@@ -171,7 +171,7 @@ timer started on the phone shows on the laptop and can be stopped there.
 - Stop after 20 seconds: `timeUsed` is unchanged and still `null` if it was.
 - A timer started at 11pm and stopped at 9am the next day opens the long-run prompt; **Stopped
   at 11:40 PM** records 40m.
-- Completing a running task from the MCP `complete_task` tool stops it and records the session.
+- Completing a running task from the MCP `complete_tasks` tool (or `finish_task`) stops it and records the session.
 - Deleting a running task leaves no running timer behind.
 - The header pill and tab title appear on Inbox, Activity and Settings while a timer runs.
 - Account export includes every session; account delete removes them.
