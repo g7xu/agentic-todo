@@ -1,0 +1,70 @@
+# Applies every Prisma migration to a fresh, throwaway Postgres on each pull
+# request, so a broken migration fails here rather than in a Vercel deploy,
+# where a failed `prisma migrate deploy` is recorded in the database and blocks
+# every later deploy until someone clears it by hand.
+name: Migrations
+
+on:
+  pull_request:
+    paths:
+      - "prisma/**"
+      - "prisma.config.ts"
+      - "scripts/check-migrations.mjs"
+      - "scripts/migrate-on-deploy.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/migrations.yml"
+  push:
+    branches: [main]
+    paths:
+      - "prisma/**"
+      - "prisma.config.ts"
+      - "scripts/check-migrations.mjs"
+      - "scripts/migrate-on-deploy.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic_todo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Throwaway database inside this job; nothing here reaches Neon.
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/agentic_todo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check migration files are SQL
+        run: node scripts/check-migrations.mjs
+
+      - name: Apply every migration to an empty database
+        run: npx prisma migrate deploy
+
+      - name: Check the migrations match prisma/schema.prisma
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code

@@ -21,11 +21,18 @@ import { config as loadEnv } from "dotenv";
 // Same load as prisma.config.ts — the Prisma CLI doesn't read .env.local, so a
 // local `npm run build` would otherwise look identical to an unconfigured
 // preview and skip migrations it should run.
-loadEnv({ path: ".env.local" });
+// `quiet` keeps dotenv's banner out of the build log and out of anything that
+// captures this script's output.
+loadEnv({ path: ".env.local", quiet: true });
 
-if (!(process.env.DIRECT_URL ?? process.env.DATABASE_URL)) {
+// Same order as prisma.config.ts: DATABASE_URL_UNPOOLED is what Neon's Vercel
+// integration sets for a preview's own branch (docs/PREVIEW-DATABASES.md).
+const url =
+  process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+
+if (!url) {
   console.log(
-    "[migrate] no DIRECT_URL or DATABASE_URL set — skipping `prisma migrate deploy`",
+    "[migrate] no DIRECT_URL, DATABASE_URL_UNPOOLED or DATABASE_URL set — skipping `prisma migrate deploy`",
   );
   process.exit(0);
 }
