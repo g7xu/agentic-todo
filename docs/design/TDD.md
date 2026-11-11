@@ -651,7 +651,8 @@ which is surfaced honestly here.
 - `.env.local` for dev (loaded by `prisma.config.ts` via dotenv for Prisma CLI); `vercel env` for
   Preview/Production.
 - Env vars: `DATABASE_URL` (pooled Neon, `-pooler` host — used by the runtime `@prisma/adapter-neon`),
-  `DIRECT_URL` (unpooled — used by `prisma migrate`), `NEON_AUTH_BASE_URL` (the Auth URL from the Neon
+  `DIRECT_URL` (unpooled — used by `prisma migrate`; `DATABASE_URL_UNPOOLED`, set per preview by
+  Neon's Vercel integration, is read when it is absent, docs/PREVIEW-DATABASES.md), `NEON_AUTH_BASE_URL` (the Auth URL from the Neon
   console → Auth), `NEON_AUTH_COOKIE_SECRET` (server only, ≥ 32 chars, `openssl rand -base64 48`),
   `APP_URL` (public origin, no trailing slash — the OAuth issuer for the MCP server, MCP.md §3).
 - Prisma client is generated to `src/generated/prisma` (gitignored) and regenerated via a

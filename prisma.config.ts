@@ -2,8 +2,11 @@ import { config as loadEnv } from "dotenv";
 import { defineConfig } from "prisma/config";
 
 // Next.js reads .env.local, but the Prisma CLI does not load it automatically,
-// so load it here for `prisma migrate` / `prisma db` commands.
-loadEnv({ path: ".env.local" });
+// so load it here for `prisma migrate` / `prisma db` commands. `quiet` keeps
+// dotenv's banner off stdout: CLI output is sometimes redirected into a file
+// (`prisma migrate diff --script > migration.sql`), and the banner once landed
+// at the top of a migration and broke every deploy after it.
+loadEnv({ path: ".env.local", quiet: true });
 
 /**
  * Neon scales an idle branch's compute to zero, and waking it can take longer
@@ -34,6 +37,10 @@ export default defineConfig({
   datasource: {
     // Migrations run against a DIRECT (unpooled) Neon connection; the pooled
     // DATABASE_URL is used by the runtime driver adapter (src/lib/db.ts).
-    url: withConnectTimeout(process.env.DIRECT_URL ?? process.env.DATABASE_URL),
+    // DATABASE_URL_UNPOOLED is the name Neon's Vercel integration gives the
+    // direct URL of each preview's own branch (docs/PREVIEW-DATABASES.md).
+    url: withConnectTimeout(
+      process.env.DIRECT_URL ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL,
+    ),
   },
 });
