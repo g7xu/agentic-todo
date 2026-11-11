@@ -1,4 +1,3 @@
-◇ injected env (0) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
 -- AlterTable
 ALTER TABLE "tasks" ADD COLUMN     "agent_question" TEXT,
 ADD COLUMN     "agent_state" TEXT,
