@@ -42,7 +42,6 @@ import {
   bulkDelete,
   bulkReschedule,
   createTask,
-  deleteTask,
   getTask,
   listTasks,
   setTaskStatus,
@@ -90,7 +89,8 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - Weekly reviews are boards keyed by the Sunday that starts the week. Notes sit in the unsorted pile or in one of four columns: thorn (what stung), rose (what went well), seed (worth trying), action (what to do next).
 - Closing a week makes its board read-only, turns up to ${MAX_CARRIED} chosen action notes into Inbox tasks planned for the next Sunday, and moves unsorted notes to the next open week. There is no reopen.
 - Writes take effect immediately; the server keeps no drafts and has no undo.
-- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
+- complete_tasks, reschedule_tasks and delete_tasks take 1 to 100 ids and report which ids were applied and which were skipped, with a reason.
+- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. finish_task and request_input with next: true also claim the following ready task in the same call. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
 
 const WRITE_SCOPE = "tasks:write";
 /** The hand-off tools alone: no general edits and no deletes (docs/AGENT-TASKS.md AT7). */
@@ -237,6 +237,34 @@ const historySchema = z
     message: "from and to must be given together",
   });
 
+/** claim_task's result, flat: the claimId sits next to the task it holds. */
+async function claim(userId: string, opts: { id?: string; leaseMinutes?: number }) {
+  const claimed = await claimTask(userId, opts);
+  if (!claimed) return { task: null };
+  return {
+    task: compactTask(claimed.task),
+    claimId: claimed.claimId,
+    claimExpiresAt: claimed.claimExpiresAt,
+    log: claimed.log,
+  };
+}
+
+/**
+ * A hand-off move's result, optionally with the next claim. The move has
+ * already been committed by then, so a failure to claim the next task is
+ * reported inside next rather than as a tool error, which would read as if
+ * the move itself had failed.
+ */
+async function withNext(userId: string, task: Record<string, unknown>, next: boolean | undefined) {
+  if (!next) return { task };
+  try {
+    return { task, next: await claim(userId, {}) };
+  } catch (e) {
+    console.error("MCP next claim failed:", e);
+    return { task, next: { task: null, error: "Claiming the next task failed; claim_task can retry it." } };
+  }
+}
+
 export function registerTools(server: McpServer): void {
   server.registerTool(
     "list_tasks",
@@ -244,7 +272,7 @@ export function registerTools(server: McpServer): void {
       title: "List tasks",
       annotations: READ,
       description:
-        "Active tasks plus recently completed ones, with today's date and the user's timezone. Filter with status, projectId, or agentState (\"ready\" lists the tasks handed to the agent and waiting).",
+        "Active tasks plus recently completed ones, with today's date and the user's timezone. Filter with status, projectId, or agentState (\"ready\" lists the tasks handed to the agent and waiting, \"needs_input\" the ones waiting on the user). Returns { today, timezone, tasks }.",
       inputSchema: z.object({
         status: z.enum(["active", "completed"]).optional(),
         projectId: projectIdSchema.optional(),
@@ -279,7 +307,7 @@ export function registerTools(server: McpServer): void {
       title: "Create task",
       annotations: ADD,
       description:
-        "Create one task. dueDate is the planned day; deadline is the hard due date. Omit projectId for the Inbox.",
+        "Create one task. dueDate is the planned day; deadline is the hard due date. Omit projectId for the Inbox. Returns the task.",
       inputSchema: createTaskSchema,
     },
     (args, ctx) =>
@@ -294,7 +322,7 @@ export function registerTools(server: McpServer): void {
       title: "Update task",
       annotations: CHANGE,
       description:
-        "Change fields of a task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate.",
+        "Change fields of one task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate. Returns the task.",
       inputSchema: updateTaskSchema.extend({ id: taskIdSchema }),
     },
     (args, ctx) =>
@@ -305,28 +333,25 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "complete_task",
+    "complete_tasks",
     {
-      title: "Complete task",
+      title: "Complete tasks",
       annotations: CHANGE,
-      description: "Mark a task done.",
-      inputSchema: z.object({ id: taskIdSchema }),
+      description:
+        "Mark 1 to 100 tasks done. A running timer on a task is stopped first. An already-completed task counts as applied and keeps its first completion time. Returns applied ids, skipped ids with a reason (not_found, routine_day_missed), and tasksChanged.",
+      inputSchema: z.object({ ids: idList }),
     },
     (args, ctx) =>
-      run(ctx, { write: true }, async (userId) => {
-        const task = await setTaskStatus(userId, args.id, "completed");
-        if (!task) throw new Error("Task not found");
-        return compactTask(task);
-      }),
+      run(ctx, { write: true }, (userId) => bulkComplete(userId, args.ids)),
   );
 
   server.registerTool(
-    "uncomplete_task",
+    "reopen_task",
     {
       title: "Reopen task",
       annotations: CHANGE,
       description:
-        "Mark a completed task active again. Reopening a routine day removes that day's record instead of returning a task.",
+        "Mark a completed task active again and return it. Reopening a routine day removes that day's record instead, and returns { removed: true, id }.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
     (args, ctx) =>
@@ -337,27 +362,12 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "delete_task",
-    {
-      title: "Delete task",
-      annotations: CHANGE,
-      description: "Permanently delete a task.",
-      inputSchema: z.object({ id: taskIdSchema }),
-    },
-    (args, ctx) =>
-      run(ctx, { write: true }, async (userId) => {
-        if (!(await deleteTask(userId, args.id))) throw new Error("Task not found");
-        return { deleted: true, id: args.id };
-      }),
-  );
-
-  server.registerTool(
-    "bulk_reschedule",
+    "reschedule_tasks",
     {
       title: "Reschedule tasks",
       annotations: CHANGE,
       description:
-        "Set the planned date of up to 100 tasks at once. Routine-day tasks are skipped.",
+        "Set one planned date (dueDate) on 1 to 100 tasks. Deadlines are unchanged. Returns applied ids, skipped ids with a reason (not_found, routine_date_fixed), and tasksChanged.",
       inputSchema: z.object({ ids: idList, dueDate: dateStr }),
     },
     (args, ctx) =>
@@ -367,23 +377,12 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "bulk_complete",
-    {
-      title: "Complete tasks",
-      annotations: CHANGE,
-      description: "Mark up to 100 tasks done at once.",
-      inputSchema: z.object({ ids: idList }),
-    },
-    (args, ctx) =>
-      run(ctx, { write: true }, (userId) => bulkComplete(userId, args.ids)),
-  );
-
-  server.registerTool(
-    "bulk_delete",
+    "delete_tasks",
     {
       title: "Delete tasks",
       annotations: CHANGE,
-      description: "Permanently delete up to 100 tasks at once.",
+      description:
+        "Permanently delete 1 to 100 tasks and their agent logs. Returns applied ids, skipped ids with reason not_found, and tasksChanged.",
       inputSchema: z.object({ ids: idList }),
     },
     (args, ctx) =>
@@ -396,7 +395,7 @@ export function registerTools(server: McpServer): void {
       title: "Get task",
       annotations: READ,
       description:
-        "One task with its agent log: progress notes, questions, the user's answers and reports, oldest first.",
+        "One task with its agent log: progress notes, questions, the user's answers and reports, oldest first. Returns { task, log }.",
       inputSchema: z.object({ id: taskIdSchema }),
     },
     (args, ctx) =>
@@ -407,23 +406,23 @@ export function registerTools(server: McpServer): void {
       }),
   );
 
+  const leaseInput = z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LEASE_MIN)
+    .optional()
+    .describe(`Minutes the claim lasts, default 30, at most ${MAX_LEASE_MIN}.`);
+
   server.registerTool(
     "claim_task",
     {
       title: "Claim task",
       annotations: HANDOFF,
-      description: `Claim a task handed to the agent so no other run works it. Without id, claims the next ready task by priority, deadline and planned date; returns claimed: null when none is waiting. The result carries the claimId the other hand-off tools require, when the claim lapses (leaseMinutes, default 30, at most ${MAX_LEASE_MIN}), and the task's recent log. A lapsed claim may be taken over by another run.`,
-      inputSchema: z.object({
-        id: taskIdSchema.optional(),
-        leaseMinutes: z.number().int().min(1).max(MAX_LEASE_MIN).optional(),
-      }),
+      description: `Claim a task handed to the agent so no other run works it. Without id, claims the next ready task by priority, deadline and planned date. Returns { task, claimId, claimExpiresAt, log }, where log is the task's earlier notes, questions, answers and reports, oldest first; returns { task: null } when nothing is waiting. claimId is required by log_task_progress, request_input, release_task and finish_task. A lapsed claim may be taken over by another run.`,
+      inputSchema: z.object({ id: taskIdSchema.optional(), leaseMinutes: leaseInput }),
     },
-    (args, ctx) =>
-      run(ctx, { agent: true }, async (userId) => {
-        const claimed = await claimTask(userId, args);
-        if (!claimed) return { claimed: null };
-        return { claimed: { ...claimed, task: compactTask(claimed.task) } };
-      }),
+    (args, ctx) => run(ctx, { agent: true }, (userId) => claim(userId, args)),
   );
 
   const claimInput = {
@@ -431,6 +430,13 @@ export function registerTools(server: McpServer): void {
     claimId: z.string().uuid().describe("The claimId claim_task returned."),
   };
   const logText = z.string().trim().min(1).max(10000);
+  const nextInput = z
+    .boolean()
+    .optional()
+    .describe(
+      "true also claims the next ready task in the same call and returns it as next, in claim_task's shape.",
+    );
+  const NEXT_NOTE = "With next: true, the result also holds next, the following claimed task or { task: null }.";
 
   server.registerTool(
     "log_task_progress",
@@ -438,12 +444,8 @@ export function registerTools(server: McpServer): void {
       title: "Log task progress",
       annotations: HANDOFF,
       description:
-        "Add a progress note to a claimed task's log and renew its claim for leaseMinutes (default 30).",
-      inputSchema: z.object({
-        ...claimInput,
-        note: logText,
-        leaseMinutes: z.number().int().min(1).max(MAX_LEASE_MIN).optional(),
-      }),
+        "Add a progress note to a claimed task's log and renew its claim for leaseMinutes (default 30). Returns { claimExpiresAt }.",
+      inputSchema: z.object({ ...claimInput, note: logText, leaseMinutes: leaseInput }),
     },
     (args, ctx) =>
       run(ctx, { agent: true }, (userId) =>
@@ -456,13 +458,20 @@ export function registerTools(server: McpServer): void {
     {
       title: "Ask the user",
       annotations: HANDOFF,
-      description:
-        "Set a claimed task to needs_input with one question for the user and release the claim. The user's answer appears in the log and the task returns to ready.",
-      inputSchema: z.object({ ...claimInput, question: z.string().trim().min(1).max(2000) }),
+      description: `Set a claimed task to needs_input with one question for the user and release the claim. The user's answer appears in the log and the task returns to ready. Returns { task }. ${NEXT_NOTE}`,
+      inputSchema: z.object({
+        ...claimInput,
+        question: z.string().trim().min(1).max(2000),
+        next: nextInput,
+      }),
     },
     (args, ctx) =>
       run(ctx, { agent: true }, async (userId) =>
-        compactTask(await requestInput(userId, args.id, args.claimId, args.question)),
+        withNext(
+          userId,
+          compactTask(await requestInput(userId, args.id, args.claimId, args.question)),
+          args.next,
+        ),
       ),
   );
 
@@ -472,13 +481,13 @@ export function registerTools(server: McpServer): void {
       title: "Release task",
       annotations: HANDOFF,
       description:
-        "Put a claimed task back to ready without finishing it, with an optional note for the next run.",
+        "Put a claimed task back to ready without finishing it, with an optional note for the next run. Returns { task }.",
       inputSchema: z.object({ ...claimInput, note: logText.optional() }),
     },
     (args, ctx) =>
-      run(ctx, { agent: true }, async (userId) =>
-        compactTask(await releaseTask(userId, args.id, args.claimId, args.note)),
-      ),
+      run(ctx, { agent: true }, async (userId) => ({
+        task: compactTask(await releaseTask(userId, args.id, args.claimId, args.note)),
+      })),
   );
 
   server.registerTool(
@@ -486,13 +495,16 @@ export function registerTools(server: McpServer): void {
     {
       title: "Finish task",
       annotations: CHANGE,
-      description:
-        "Complete a claimed task and add the report to its log: what was done, the answer, and links to anything made. The task's description is left unchanged.",
-      inputSchema: z.object({ ...claimInput, report: logText }),
+      description: `Complete a claimed task and add the report to its log: what was done, the answer, and links to anything made. The task's description is left unchanged. Returns { task }. ${NEXT_NOTE}`,
+      inputSchema: z.object({ ...claimInput, report: logText, next: nextInput }),
     },
     (args, ctx) =>
       run(ctx, { agent: true }, async (userId) =>
-        compactTask(await finishTask(userId, args.id, args.claimId, args.report)),
+        withNext(
+          userId,
+          compactTask(await finishTask(userId, args.id, args.claimId, args.report)),
+          args.next,
+        ),
       ),
   );
 
@@ -502,7 +514,7 @@ export function registerTools(server: McpServer): void {
       title: "Suggest task",
       annotations: ADD,
       description:
-        "Create a task marked as suggested by the agent. It is not claimable until the user hands it over. Same fields as create_task.",
+        "Create a task marked as suggested by the agent. It is not claimable until the user hands it over. Same fields as create_task. Returns the task.",
       inputSchema: createTaskSchema,
     },
     (args, ctx) =>
@@ -535,11 +547,11 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "update_project",
+    "rename_project",
     {
       title: "Rename project",
       annotations: CHANGE,
-      description: "Change a project's name. The Inbox can be renamed too.",
+      description: "Change a project's name. The Inbox can be renamed too. Returns { id, name }.",
       inputSchema: z.object({ id: projectIdSchema, name: projectNameSchema }),
     },
     (args, ctx) =>
@@ -557,7 +569,7 @@ export function registerTools(server: McpServer): void {
       title: "Delete project",
       annotations: CHANGE,
       description:
-        "Permanently delete a project. Its tasks and routines move to the Inbox. The Inbox cannot be deleted.",
+        "Permanently delete a project. Its tasks and routines move to the Inbox. The Inbox cannot be deleted. Returns { deleted: true, id }.",
       inputSchema: z.object({ id: projectIdSchema }),
     },
     (args, ctx) =>
@@ -666,7 +678,7 @@ export function registerTools(server: McpServer): void {
       title: "Add review note",
       annotations: ADD,
       description:
-        "Add a note at the end of a column of a week's board, creating the week's review if it has none. kind defaults to unsorted.",
+        "Add a note at the end of a column of a week's board, creating the week's review if it has none. kind defaults to unsorted. Returns the note with its week.",
       inputSchema: z.object({
         week: weekInput,
         kind: noteKindSchema.optional(),
@@ -689,28 +701,25 @@ export function registerTools(server: McpServer): void {
     {
       title: "Edit review note",
       annotations: CHANGE,
-      description: "Replace a note's text. Notes on a closed week are read-only.",
-      inputSchema: z.object({ id: noteIdSchema, content: noteContentSchema }),
-    },
-    (args, ctx) =>
-      run(ctx, { write: true }, async (userId) =>
-        compactNote(await updateNote(userId, args.id, args.content)),
-      ),
-  );
-
-  server.registerTool(
-    "move_review_note",
-    {
-      title: "Move review note",
-      annotations: CHANGE,
       description:
-        "Move a note to the end of another column or of the unsorted pile. Notes on a closed week are read-only.",
-      inputSchema: z.object({ id: noteIdSchema, kind: noteKindSchema }),
+        "Replace a note's text, move it to the end of another column or of the unsorted pile (kind), or both. Notes on a closed week are read-only. Returns the note.",
+      inputSchema: z
+        .object({
+          id: noteIdSchema,
+          content: noteContentSchema.optional(),
+          kind: noteKindSchema.optional(),
+        })
+        .refine((v) => v.content !== undefined || v.kind !== undefined, {
+          message: "give content, kind, or both",
+        }),
     },
     (args, ctx) =>
-      run(ctx, { write: true }, async (userId) =>
-        compactNote(await moveNote(userId, args.id, { kind: args.kind })),
-      ),
+      run(ctx, { write: true }, async (userId) => {
+        let note: ReviewNoteDTO | undefined;
+        if (args.content !== undefined) note = await updateNote(userId, args.id, args.content);
+        if (args.kind !== undefined) note = await moveNote(userId, args.id, { kind: args.kind });
+        return compactNote(note!);
+      }),
   );
 
   server.registerTool(
@@ -718,7 +727,7 @@ export function registerTools(server: McpServer): void {
     {
       title: "Delete review note",
       annotations: CHANGE,
-      description: "Permanently delete a note. Notes on a closed week are read-only.",
+      description: "Permanently delete a note. Notes on a closed week are read-only. Returns { deleted: true, id }.",
       inputSchema: z.object({ id: noteIdSchema }),
     },
     (args, ctx) =>

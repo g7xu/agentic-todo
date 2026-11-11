@@ -200,9 +200,8 @@ async function main() {
   const projects = await mcp(access1, "tools/call", { name: "list_projects", arguments: {} }, 3);
   check("list_projects returns an Inbox", /"isInbox":true/.test(toolText(projects.message)), projects.text.slice(0, 200));
 
-  const bad = await mcp(access1, "tools/call", { name: "delete_task", arguments: { id: "00000000-0000-4000-8000-000000000000" } }, 4);
-  const badResult = bad.message?.result as { isError?: boolean } | undefined;
-  check("deleting an unknown task is a readable tool error", badResult?.isError === true, bad.text.slice(0, 200));
+  const bad = await mcp(access1, "tools/call", { name: "delete_tasks", arguments: { ids: ["00000000-0000-4000-8000-000000000000"] } }, 4);
+  check("deleting an unknown task reports it skipped as not_found", /"reason":"not_found"/.test(toolText(bad.message)), bad.text.slice(0, 200));
 
   // --- refresh rotation -----------------------------------------------------
   const refreshed = await timed("refresh", () =>

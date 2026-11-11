@@ -441,68 +441,69 @@ async function sectionB() {
   // Complete / uncomplete / delete lifecycle.
   const lc = await createTask({ content: `${PREFIX} lifecycle ${RUN}` });
   const lcId = lc.data?.id;
-  const done = await call("complete_task", { id: lcId });
-  check(!done.isError && done.data?.status === "completed" && typeof done.data?.completedAt === "string" && !Number.isNaN(Date.parse(done.data.completedAt)), "B complete_task sets status completed + completedAt", done.data ?? done.text);
+  const done = await call("complete_tasks", { ids: [lcId] });
   const inCompleted = await findTask(lcId, "completed");
   const inActive = await findTask(lcId, "active");
+  check(!done.isError && (done.data?.applied ?? []).includes(lcId) && inCompleted?.status === "completed" && typeof inCompleted?.completedAt === "string" && !Number.isNaN(Date.parse(inCompleted.completedAt)), "B complete_tasks [one id] sets status completed + completedAt", done.data ?? done.text);
   check(Boolean(inCompleted) && !inActive, "B completed task listed under completed, not under active", { completed: Boolean(inCompleted), active: Boolean(inActive) });
-  const again = await call("complete_task", { id: lcId });
-  (again.isError ? note : pass)("B complete_task on an already-completed task", again.isError ? `error: ${again.text}` : `idempotent, completedAt=${again.data?.completedAt} (was ${done.data?.completedAt})`);
-  if (!again.isError && again.data?.completedAt !== done.data?.completedAt) note("B re-completing moved completedAt", { first: done.data?.completedAt, second: again.data?.completedAt });
-  const undo = await call("uncomplete_task", { id: lcId });
+  const again = await call("complete_tasks", { ids: [lcId] });
+  const againRow = await findTask(lcId, "completed");
+  (again.isError ? note : pass)("B complete_tasks on an already-completed task", again.isError ? `error: ${again.text}` : `idempotent, tasksChanged=${again.data?.tasksChanged}, completedAt=${againRow?.completedAt} (was ${inCompleted?.completedAt})`);
+  if (!again.isError && againRow?.completedAt !== inCompleted?.completedAt) note("B re-completing moved completedAt", { first: inCompleted?.completedAt, second: againRow?.completedAt });
+  const undo = await call("reopen_task", { id: lcId });
   const backActive = await findTask(lcId, "active");
   const stillCompleted = await findTask(lcId, "completed");
-  check(!undo.isError && undo.data?.status === "active" && backActive && !stillCompleted && backActive.completedAt == null, "B uncomplete_task reverses completion", { status: undo.data?.status, completedAt: backActive?.completedAt, inCompletedList: Boolean(stillCompleted) });
-  const undoAgain = await call("uncomplete_task", { id: lcId });
-  (undoAgain.isError ? note : pass)("B uncomplete_task on an active task", undoAgain.isError ? `error: ${undoAgain.text}` : "idempotent");
-  const del = await call("delete_task", { id: lcId });
-  check(!del.isError && del.data?.deleted === true && del.data?.id === lcId, "B delete_task reports deleted:true", del.data ?? del.text);
+  check(!undo.isError && undo.data?.status === "active" && backActive && !stillCompleted && backActive.completedAt == null, "B reopen_task reverses completion", { status: undo.data?.status, completedAt: backActive?.completedAt, inCompletedList: Boolean(stillCompleted) });
+  const undoAgain = await call("reopen_task", { id: lcId });
+  (undoAgain.isError ? note : pass)("B reopen_task on an active task", undoAgain.isError ? `error: ${undoAgain.text}` : "idempotent");
+  const del = await call("delete_tasks", { ids: [lcId] });
+  check(!del.isError && (del.data?.applied ?? []).includes(lcId), "B delete_tasks [one id] reports it applied", del.data ?? del.text);
   createdTasks.delete(lcId);
   const goneA = await findTask(lcId, "active");
   const goneC = await findTask(lcId, "completed");
   check(!goneA && !goneC, "B deleted task gone from both lists", { active: Boolean(goneA), completed: Boolean(goneC) });
-  const del2 = await call("delete_task", { id: lcId });
-  check(del2.isError && /not found/i.test(del2.text), "B deleting twice -> 'not found' error", del2.text);
+  const del2 = await call("delete_tasks", { ids: [lcId] });
+  check(!del2.isError && (del2.data?.skipped ?? []).some((x: any) => x?.id === lcId && x?.reason === "not_found"), "B deleting twice -> skipped not_found", del2.data ?? del2.text);
   const upGone = await call("update_task", { id: lcId, content: "x" });
   check(upGone.isError, "B update_task on a deleted task is an error", upGone.text);
-  const cmpRandom = await call("complete_task", { id: randomUuid() });
-  check(cmpRandom.isError && cmpRandom.status === 200, "B complete_task on random uuid -> tool error, HTTP 200", cmpRandom.text);
+  const cmpRandom = await call("complete_tasks", { ids: [randomUuid()] });
+  check(!cmpRandom.isError && cmpRandom.status === 200 && cmpRandom.data?.skipped?.[0]?.reason === "not_found", "B complete_tasks on random uuid -> skipped not_found, HTTP 200", cmpRandom.data ?? cmpRandom.text);
 
   // Bulk operations.
   const b = await Promise.all([1, 2, 3].map((i) => createTask({ content: `${PREFIX} bulk ${i} ${RUN}` })));
   const bIds = b.map((r) => r.data?.id);
   const ghost = randomUuid();
   const target = addDays(today, 3);
-  const rs = await call("bulk_reschedule", { ids: [...bIds, ghost], dueDate: target });
+  const rs = await call("reschedule_tasks", { ids: [...bIds, ghost], dueDate: target });
   const rsApplied: string[] = rs.data?.applied ?? [];
   const rsSkipped: any[] = rs.data?.skipped ?? [];
   const skippedIds = rsSkipped.map((s: any) => (typeof s === "string" ? s : s?.id));
-  check(!rs.isError && bIds.every((id) => rsApplied.includes(id)) && skippedIds.includes(ghost) && !rsApplied.includes(ghost), "B bulk_reschedule applied=our ids, skipped=random uuid", rs.data ?? rs.text);
+  check(!rs.isError && bIds.every((id) => rsApplied.includes(id)) && skippedIds.includes(ghost) && !rsApplied.includes(ghost), "B reschedule_tasks applied=our ids, skipped=random uuid", rs.data ?? rs.text);
   const afterRs = await listTasks("active");
-  check(bIds.every((id) => afterRs.tasks.find((t) => t.id === id)?.dueDate === target), "B bulk_reschedule read-back dueDate", target);
+  check(bIds.every((id) => afterRs.tasks.find((t) => t.id === id)?.dueDate === target), "B reschedule_tasks read-back dueDate", target);
   note("B bulk skipped-entry shape", JSON.stringify(rsSkipped[0]));
 
-  const bc = await call("bulk_complete", { ids: [bIds[0], bIds[1], ghost, bIds[0]] });
+  const bc = await call("complete_tasks", { ids: [bIds[0], bIds[1], ghost, bIds[0]] });
   const bcApplied: string[] = bc.data?.applied ?? [];
-  check(!bc.isError && bcApplied.includes(bIds[0]) && bcApplied.includes(bIds[1]) && !bcApplied.includes(ghost), "B bulk_complete applied/skipped correct (with duplicate id in input)", bc.data ?? bc.text);
-  note("B bulk_complete duplicate id appears in applied N times", String(bcApplied.filter((x) => x === bIds[0]).length));
+  check(!bc.isError && bcApplied.includes(bIds[0]) && bcApplied.includes(bIds[1]) && !bcApplied.includes(ghost), "B complete_tasks applied/skipped correct (with duplicate id in input)", bc.data ?? bc.text);
+  note("B complete_tasks duplicate id appears in applied N times", String(bcApplied.filter((x) => x === bIds[0]).length));
   const afterBc = await listTasks("completed");
-  check([bIds[0], bIds[1]].every((id) => afterBc.tasks.find((t) => t.id === id)?.status === "completed"), "B bulk_complete read-back status", "both completed");
-  const bcAgain = await call("bulk_complete", { ids: [bIds[0]] });
-  note("B bulk_complete on already-completed task", bcAgain.data ?? bcAgain.text);
+  check([bIds[0], bIds[1]].every((id) => afterBc.tasks.find((t) => t.id === id)?.status === "completed"), "B complete_tasks read-back status", "both completed");
+  const bcAgain = await call("complete_tasks", { ids: [bIds[0]] });
+  note("B complete_tasks on already-completed task", bcAgain.data ?? bcAgain.text);
 
-  const bd = await call("bulk_delete", { ids: [...bIds, ghost] });
+  const bd = await call("delete_tasks", { ids: [...bIds, ghost] });
   const bdApplied: string[] = bd.data?.applied ?? [];
-  check(!bd.isError && bIds.every((id) => bdApplied.includes(id)) && !bdApplied.includes(ghost), "B bulk_delete applied=our ids, skipped=random uuid", bd.data ?? bd.text);
+  check(!bd.isError && bIds.every((id) => bdApplied.includes(id)) && !bdApplied.includes(ghost), "B delete_tasks applied=our ids, skipped=random uuid", bd.data ?? bd.text);
   bIds.forEach((id) => createdTasks.delete(id));
   const afterBd = await listTasks();
-  check(!bIds.some((id) => afterBd.tasks.some((t) => t.id === id)), "B bulk_delete read-back: all gone", "none remain");
-  const bdOwnerFixture = await call("bulk_reschedule", { ids: [], dueDate: today });
-  check(bdOwnerFixture.isError, "B bulk_reschedule with empty ids rejected", bdOwnerFixture.text);
-  const tooMany = await call("bulk_complete", { ids: Array.from({ length: 101 }, () => randomUuid()) });
-  check(tooMany.isError && tooMany.status === 200, "B bulk_complete with 101 ids rejected", tooMany.text.slice(0, 120));
-  const hundred = await call("bulk_complete", { ids: Array.from({ length: 100 }, () => randomUuid()) });
-  check(!hundred.isError && (hundred.data?.applied?.length ?? -1) === 0 && (hundred.data?.skipped?.length ?? -1) === 100, "B bulk_complete with 100 unknown ids: applied 0, skipped 100", { applied: hundred.data?.applied?.length, skipped: hundred.data?.skipped?.length });
+  check(!bIds.some((id) => afterBd.tasks.some((t) => t.id === id)), "B delete_tasks read-back: all gone", "none remain");
+  const bdOwnerFixture = await call("reschedule_tasks", { ids: [], dueDate: today });
+  check(bdOwnerFixture.isError, "B reschedule_tasks with empty ids rejected", bdOwnerFixture.text);
+  const tooMany = await call("complete_tasks", { ids: Array.from({ length: 101 }, () => randomUuid()) });
+  check(tooMany.isError && tooMany.status === 200, "B complete_tasks with 101 ids rejected", tooMany.text.slice(0, 120));
+  const hundred = await call("complete_tasks", { ids: Array.from({ length: 100 }, () => randomUuid()) });
+  check(!hundred.isError && (hundred.data?.applied?.length ?? -1) === 0 && (hundred.data?.skipped?.length ?? -1) === 100, "B complete_tasks with 100 unknown ids: applied 0, skipped 100", { applied: hundred.data?.applied?.length, skipped: hundred.data?.skipped?.length });
 
   // Validation edge cases (all should be tool errors over HTTP 200, never 5xx).
   const vcases: [string, string, Record<string, unknown>][] = [
@@ -657,12 +658,12 @@ async function sectionB() {
     // A refusal here is conclusive. Acceptance is not: the value sent equals
     // the stored one, and sending a different one would mutate owner data.
     const ud = await call("update_task", { id: routineTask.id, dueDate: routineTask.dueDate });
-    (ud.isError ? pass : note)("B update_task dueDate on routine-day task", ud.isError ? `refused: ${ud.text.slice(0, 120)}` : "accepted a same-value dueDate update (a changed value was not tried); bulk_reschedule refuses the same task regardless of value");
+    (ud.isError ? pass : note)("B update_task dueDate on routine-day task", ud.isError ? `refused: ${ud.text.slice(0, 120)}` : "accepted a same-value dueDate update (a changed value was not tried); reschedule_tasks refuses the same task regardless of value");
     const up = await call("update_task", { id: routineTask.id, projectId: routineTask.projectId });
     (up.isError ? pass : note)("B update_task projectId on routine-day task", up.isError ? `refused: ${up.text.slice(0, 120)}` : "accepted a same-value projectId update (a changed value was not tried)");
-    const brs = await call("bulk_reschedule", { ids: [routineTask.id], dueDate: routineTask.dueDate });
+    const brs = await call("reschedule_tasks", { ids: [routineTask.id], dueDate: routineTask.dueDate });
     const skipped = (brs.data?.skipped ?? []).map((s: any) => (typeof s === "string" ? s : s?.id));
-    check(!brs.isError && skipped.includes(routineTask.id) && !(brs.data?.applied ?? []).includes(routineTask.id), "B bulk_reschedule skips routine-day task", brs.data ?? brs.text);
+    check(!brs.isError && skipped.includes(routineTask.id) && !(brs.data?.applied ?? []).includes(routineTask.id), "B reschedule_tasks skips routine-day task", brs.data ?? brs.text);
     const uc = await call("update_task", { id: routineTask.id, priority: routineTask.priority });
     note("B update_task priority (same value) on routine-day task", uc.isError ? `refused: ${uc.text.slice(0, 100)}` : "accepted");
     const after = all.tasks.find((t) => t.id === routineTask.id);
@@ -691,10 +692,10 @@ async function sectionC() {
   const tl = await rpc("tools/list", {});
   const tools: any[] = tl.msg?.result?.tools ?? [];
   const names = tools.map((t) => t.name).sort();
-  const expected = ["bulk_complete", "bulk_delete", "bulk_reschedule", "complete_task", "create_project", "create_task", "delete_task", "get_routine_history", "list_projects", "list_routines", "list_tasks", "uncomplete_task", "update_task"];
-  check(JSON.stringify(names) === JSON.stringify(expected), "C tools/list exposes exactly the 13 known tools", names);
+  const expected = ["add_review_note", "claim_task", "close_review", "complete_tasks", "create_project", "create_task", "delete_project", "delete_review_note", "delete_tasks", "finish_task", "get_review", "get_routine_history", "get_task", "list_projects", "list_reviews", "list_routines", "list_tasks", "log_task_progress", "release_task", "rename_project", "reopen_task", "request_input", "reschedule_tasks", "suggest_task", "update_review_note", "update_task"];
+  check(JSON.stringify(names) === JSON.stringify(expected), "C tools/list exposes exactly the 26 known tools", names);
   check(tools.every((t) => t.inputSchema?.type === "object" && typeof t.description === "string" && t.description.length > 0), "C every tool has an object inputSchema and description", `tools=${tools.length}`);
-  const writeTools = tools.filter((t) => /^(create|update|delete|complete|uncomplete|bulk)_/.test(t.name));
+  const writeTools = tools.filter((t) => /^(create|update|delete|complete|reopen|reschedule|rename)_/.test(t.name));
   check(writeTools.every((t) => Array.isArray(t.inputSchema.required) && t.inputSchema.required.length > 0), "C every write tool declares required inputs", writeTools.map((t) => `${t.name}:${t.inputSchema.required?.join("+")}`).join(" "));
   // Every tool listed answers tools/call (at least with a validation error, never an unknown-tool error).
   const unknownOnCall: string[] = [];
@@ -775,14 +776,14 @@ async function sectionD() {
   const listed = await listTasks("active");
   check(ids.every((id) => listed.tasks.some((t) => t.id === id)), "D all 10 parallel-created tasks visible in list_tasks", `found ${ids.filter((id) => listed.tasks.some((t) => t.id === id)).length}/10`);
 
-  // Overlapping bulk_complete.
+  // Overlapping complete_tasks.
   const [t1, t2, t3, t4] = ids;
-  const [bA, bB] = await Promise.all([call("bulk_complete", { ids: [t1, t2, t3] }), call("bulk_complete", { ids: [t2, t3, t4] })]);
+  const [bA, bB] = await Promise.all([call("complete_tasks", { ids: [t1, t2, t3] }), call("complete_tasks", { ids: [t2, t3, t4] })]);
   const appliedUnion = new Set([...(bA.data?.applied ?? []), ...(bB.data?.applied ?? [])]);
   const completedNow = await listTasks("completed");
   const allDone = [t1, t2, t3, t4].every((id) => completedNow.tasks.some((t) => t.id === id && t.status === "completed"));
-  check(bA.status === 200 && bB.status === 200 && !bA.isError && !bB.isError && allDone, "D parallel overlapping bulk_complete: no 5xx, all four completed", { A: bA.data, B: bB.data });
-  check(appliedUnion.size === 4, "D union of applied ids across overlapping bulk_complete covers all four", `union=${appliedUnion.size}`);
+  check(bA.status === 200 && bB.status === 200 && !bA.isError && !bB.isError && allDone, "D parallel overlapping complete_tasks: no 5xx, all four completed", { A: bA.data, B: bB.data });
+  check(appliedUnion.size === 4, "D union of applied ids across overlapping complete_tasks covers all four", `union=${appliedUnion.size}`);
   const overlapClaimedTwice = [t2, t3].filter((id) => (bA.data?.applied ?? []).includes(id) && (bB.data?.applied ?? []).includes(id));
   note("D overlapping ids claimed as applied by both calls", `${overlapClaimedTwice.length}/2`);
 
@@ -796,12 +797,12 @@ async function sectionD() {
   const reads = await Promise.all(Array.from({ length: 10 }, () => rpc("tools/list", {})));
   check(reads.every((r) => r.resp.status === 200 && r.msg?.result?.tools), "D 10 parallel tools/list all succeed", [...new Set(reads.map((r) => r.resp.status))]);
 
-  // Parallel delete of the same id: exactly one should report deleted.
+  // Parallel delete of the same id: exactly one should report it applied.
   const [t6] = ids.slice(5);
-  const dels = await Promise.all([call("delete_task", { id: t6 }), call("delete_task", { id: t6 }), call("delete_task", { id: t6 })]);
-  const deletedCount = dels.filter((d) => d.data?.deleted === true).length;
+  const dels = await Promise.all([call("delete_tasks", { ids: [t6] }), call("delete_tasks", { ids: [t6] }), call("delete_tasks", { ids: [t6] })]);
+  const deletedCount = dels.filter((d) => (d.data?.applied ?? []).includes(t6)).length;
   check(dels.every((d) => d.status === 200) && deletedCount >= 1 && !(await findTask(t6)), "D 3 parallel deletes of one task: no 5xx, task gone", { deletedTrue: deletedCount, errors: dels.filter((d) => d.isError).length });
-  (deletedCount === 1 ? pass : note)("D exactly one of the parallel deletes reports deleted:true", `deletedTrue=${deletedCount}`);
+  (deletedCount === 1 ? pass : note)("D exactly one of the parallel deletes reports it applied", `applied=${deletedCount}`);
   createdTasks.delete(t6);
 
   // complete vs delete race on one task. This runs last because an earlier
@@ -809,7 +810,7 @@ async function sectionD() {
   // at most the race task can be left behind.
   const sweep = [...createdTasks];
   if (sweep.length) {
-    const r = await call("bulk_delete", { ids: sweep.slice(0, 100) });
+    const r = await call("delete_tasks", { ids: sweep.slice(0, 100) });
     (r.data?.applied ?? []).forEach((id: string) => createdTasks.delete(id));
   }
   const race = await createTask({ content: `${PREFIX} race ${RUN}` });
@@ -818,7 +819,7 @@ async function sectionD() {
   let dl: ToolResult | undefined;
   let raceErr: unknown;
   try {
-    [c, dl] = await Promise.all([call("complete_task", { id: raceId }), call("delete_task", { id: raceId })]);
+    [c, dl] = await Promise.all([call("complete_tasks", { ids: [raceId] }), call("delete_tasks", { ids: [raceId] })]);
   } catch (e) {
     raceErr = e;
   }
@@ -831,7 +832,8 @@ async function sectionD() {
   check(c!.status === 200 && dl!.status === 200 && finalState !== "active(!)", "D parallel complete + delete: no 5xx, final state is completed or deleted", { complete: c!.isError ? `err:${c!.text.slice(0, 200)}` : "ok", delete: dl!.isError ? `err:${dl!.text.slice(0, 200)}` : "ok", finalState });
   // Raw database text in the error is caught as a FAIL inside call(); here only the wording is judged.
   const loserText = c!.isError ? c!.text.slice(0, 300) : "";
-  (!c!.isError || /not found/i.test(loserText) ? pass : note)("D losing side of the race gets a domain 'not found' error", c!.isError ? `complete_task error text: ${loserText}` : "complete won; no error");
+  const cSkipped = (c!.data?.skipped ?? []).some((x: any) => x?.reason === "not_found");
+  (!c!.isError ? pass : note)("D losing side of the race reports not_found in skipped", c!.isError ? `complete_tasks error text: ${loserText}` : cSkipped ? "delete won; complete skipped not_found" : "complete won");
   if (finalState === "deleted") createdTasks.delete(raceId);
 }
 
@@ -902,7 +904,7 @@ async function cleanup() {
     const ids = [...new Set([...createdTasks, ...stray])];
     let deleted = 0;
     for (let i = 0; i < ids.length; i += 100) {
-      const r = await call("bulk_delete", { ids: ids.slice(i, i + 100) });
+      const r = await call("delete_tasks", { ids: ids.slice(i, i + 100) });
       deleted += r.data?.applied?.length ?? 0;
     }
     const after = await listTasks();

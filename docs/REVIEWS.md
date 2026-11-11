@@ -67,7 +67,7 @@ same carry-three rule. Nothing was migrated from it.
 | Server actions | `src/app/actions/reviews.ts` |
 | Reads | `GET /api/reviews`, `GET /api/reviews/{week}` |
 | Pages | `/reviews`, `/reviews/{week}` |
-| MCP tools | `list_reviews`, `get_review`, `add_review_note`, `update_review_note`, `move_review_note`, `delete_review_note`, `close_review` |
+| MCP tools | `list_reviews`, `get_review`, `add_review_note`, `update_review_note` (text, column or both), `delete_review_note`, `close_review` |
 | MCP prompt | `weekly_review` (optional `week`, any day inside it) |
 
 Account export includes reviews with their notes. Account deletion removes them.
