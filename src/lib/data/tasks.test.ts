@@ -291,26 +291,29 @@ async function callTool(name: string, args: Record<string, unknown>) {
 }
 
 describe("MCP completion tools", () => {
-  it("complete_task tells the model a missed routine day can't be completed", async () => {
-    const result = await callTool("complete_task", { id: ROUTINE_MISSED });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toBe(
-      "Missed routine days can't be completed",
-    );
-  });
-
-  it("complete_task returns an already-completed task with its first completion", async () => {
-    const result = await callTool("complete_task", { id: ROUTINE_DONE });
+  it("complete_tasks skips a missed routine day for a single id instead of failing", async () => {
+    const result = await callTool("complete_tasks", { ids: [ROUTINE_MISSED] });
     expect(result.isError).toBeFalsy();
-    expect(JSON.parse(result.content[0].text)).toMatchObject({
-      id: ROUTINE_DONE,
-      status: "completed",
-      completedAt: LAST_MONTH.toISOString(),
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      applied: [],
+      skipped: [{ id: ROUTINE_MISSED, reason: "routine_day_missed" }],
+      tasksChanged: false,
     });
   });
 
-  it("bulk_complete skips a missed routine day", async () => {
-    const result = await callTool("bulk_complete", {
+  it("complete_tasks leaves an already-completed task with its first completion", async () => {
+    const result = await callTool("complete_tasks", { ids: [ROUTINE_DONE] });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      applied: [ROUTINE_DONE],
+      skipped: [],
+      tasksChanged: false,
+    });
+    expect(db.tasks.find((t) => t.id === ROUTINE_DONE)?.completedAt).toEqual(LAST_MONTH);
+  });
+
+  it("complete_tasks completes one task and skips a missed routine day in the same call", async () => {
+    const result = await callTool("complete_tasks", {
       ids: [ACTIVE, ROUTINE_MISSED],
     });
     expect(result.isError).toBeFalsy();
@@ -319,5 +322,38 @@ describe("MCP completion tools", () => {
       skipped: [{ id: ROUTINE_MISSED, reason: "routine_day_missed" }],
       tasksChanged: true,
     });
+    expect(db.tasks.find((t) => t.id === ACTIVE)?.status).toBe("completed");
+  });
+
+  it("complete_tasks reports an unknown id as not_found", async () => {
+    const ghost = "00000000-0000-4000-8000-0000000000ff";
+    const result = await callTool("complete_tasks", { ids: [ghost] });
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      applied: [],
+      skipped: [{ id: ghost, reason: "not_found" }],
+      tasksChanged: false,
+    });
+  });
+
+  it("reopen_task returns the task active again", async () => {
+    const result = await callTool("reopen_task", { id: DONE });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ id: DONE, status: "active" });
+  });
+
+  it("delete_tasks deletes one id and reports a foreign one", async () => {
+    const ghost = "00000000-0000-4000-8000-0000000000fe";
+    const result = await callTool("delete_tasks", { ids: [ACTIVE, ghost] });
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      applied: [ACTIVE],
+      skipped: [{ id: ghost, reason: "not_found" }],
+      tasksChanged: true,
+    });
+    expect(db.tasks.find((t) => t.id === ACTIVE)).toBeUndefined();
+  });
+
+  it("refuses an empty id list", async () => {
+    const result = await callTool("delete_tasks", { ids: [] });
+    expect(result.isError).toBe(true);
   });
 });

@@ -48,7 +48,7 @@ provided by the identity vendor.
   flow in v1, since scopes are co-granted.
 - **DM10 — Tool surface v1:** tasks and projects read/write; routines and history read-only.
 - **DM11 — Weekly reviews read/write, under the same two scopes** (owner-decided 2026-11-01,
-  REVIEWS.md DR9). Seven tools and one prompt, `weekly_review`. A review is task data, so no third
+  REVIEWS.md DR9). Seven tools and one prompt (six since DM14), `weekly_review`. A review is task data, so no third
   scope; a new scope would force every existing grant back through consent. Tools take any day of
   a week and resolve its Sunday, so the model never computes week keys.
 - **DM12 — Projects can be renamed and deleted** (owner-decided 2026-11-08). Deleting runs the same
@@ -60,6 +60,12 @@ provided by the identity vendor.
   `agentState`. `tasks:agent` covers only those tools; consent offers it in place of
   `tasks:write`. Existing grants keep working unchanged: write already allows the hand-off, and a
   request without `scope` still gets read and write.
+- **DM14 — One tool per job, 29 tools down to 26** (proposed 2026-11-11,
+  [MCP-TOOLS-MAP.md](./MCP-TOOLS-MAP.md)). Single and bulk task writes are one tool that takes 1 to
+  100 ids (`complete_tasks`, `delete_tasks`, `reschedule_tasks`); `update_review_note` edits a
+  note's text, column or both; names say what a tool does (`reopen_task`, `rename_project`).
+  `claim_task` returns the claimId next to the task, and `finish_task` and `request_input` can
+  claim the next task in the same call. Every capability of the 29-tool surface is kept.
 
 ## 2. Product requirements
 

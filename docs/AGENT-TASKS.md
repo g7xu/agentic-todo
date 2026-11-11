@@ -55,21 +55,24 @@ until the user hands them over.
 | `get_task` | read | one task with its log |
 | `claim_task` | agent | claim a task by id, or the next ready one by priority, deadline, planned date |
 | `log_task_progress` | agent | add a progress note, renew the lease |
-| `request_input` | agent | park the task on the user with one question |
+| `request_input` | agent | park the task on the user with one question; `next: true` also claims the next ready task |
 | `release_task` | agent | put the task back to `ready`, with an optional note |
-| `finish_task` | agent | log the report and complete the task |
+| `finish_task` | agent | log the report and complete the task; `next: true` also claims the next ready task |
 | `suggest_task` | agent | create a task marked `suggested` |
 
 Hand-off tools are annotated `destructiveHint: false` except `finish_task`, which completes the
-task like `complete_task`.
+task like `complete_tasks`.
 
 ## 4. A scheduled run
 
-1. `claim_task` with no id. `claimed: null` means nothing is waiting; the run ends.
+1. `claim_task` with no id. It returns `{ task, claimId, claimExpiresAt, log }`; `{ task: null }` means
+   nothing is waiting and the run ends.
 2. Read the task and the returned log; do the work, calling `log_task_progress` on long work.
 3. Either `finish_task` with the report (what was done, the answer, links to anything made), or
    `request_input` with one question, or `release_task` with a note if the run cannot go on.
-4. Repeat from 1 while the run has time.
+4. Repeat from 1 while the run has time. `finish_task` and `request_input` take `next: true` to
+   claim the next ready task in the same call, so a run that works N tasks makes N + 1 calls
+   instead of 2N. Their result is `{ task, next }`, with `next` in `claim_task`'s shape.
 
 ## 5. Not built
 

@@ -68,9 +68,9 @@ beforeEach(() => {
   );
 });
 
-describe("update_project", () => {
+describe("rename_project", () => {
   it("renames a project the caller owns", async () => {
-    const result = await call("update_project", { id: PROJECT_ID, name: "Renamed" });
+    const result = await call("rename_project", { id: PROJECT_ID, name: "Renamed" });
     expect(result.isError).toBeUndefined();
     expect(JSON.parse(result.content[0].text)).toEqual({ id: PROJECT_ID, name: "Renamed" });
     expect(db.prisma.project.updateMany).toHaveBeenCalledWith({
@@ -80,14 +80,14 @@ describe("update_project", () => {
   });
 
   it("reports an id the caller does not own", async () => {
-    const result = await call("update_project", { id: FOREIGN_ID, name: "Renamed" });
+    const result = await call("rename_project", { id: FOREIGN_ID, name: "Renamed" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe("Project not found");
   });
 
   it("refuses a read-only connection", async () => {
     const result = await call(
-      "update_project",
+      "rename_project",
       { id: PROJECT_ID, name: "Renamed" },
       ["tasks:read"],
     );

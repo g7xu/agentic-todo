@@ -368,7 +368,11 @@ describe("hand-off tools", () => {
   it("claims through the tool on an agent-only connection", async () => {
     const claimed = await call("claim_task", {}, ["tasks:read", "tasks:agent"]);
     expect(claimed.isError).toBeFalsy();
-    expect(JSON.parse(claimed.content[0].text).claimed.task.id).toBe(URGENT);
+    const body = JSON.parse(claimed.content[0].text);
+    expect(body.task.id).toBe(URGENT);
+    expect(body.claimId).toBe(stored(URGENT).claimId);
+    expect(body.claimExpiresAt).toBeTruthy();
+    expect(Array.isArray(body.log)).toBe(true);
   });
 
   it("suggests a task the agent cannot claim until the user hands it over", async () => {
@@ -381,8 +385,13 @@ describe("hand-off tools", () => {
   });
 
   it("keeps an agent-only connection away from general edits and deletes", async () => {
-    for (const name of ["delete_task", "update_task", "bulk_delete"]) {
-      const args = name === "bulk_delete" ? { ids: [URGENT] } : { id: URGENT };
+    for (const name of ["delete_tasks", "update_task", "complete_tasks", "reschedule_tasks"]) {
+      const args =
+        name === "update_task"
+          ? { id: URGENT }
+          : name === "reschedule_tasks"
+            ? { ids: [URGENT], dueDate: "2026-12-01" }
+            : { ids: [URGENT] };
       const res = await call(name, args, ["tasks:read", "tasks:agent"]);
       expect(res.isError, name).toBe(true);
       expect(res.content[0].text, name).toMatch(/hand-off tools/);
@@ -394,6 +403,53 @@ describe("hand-off tools", () => {
     const res = await call("claim_task", {}, ["tasks:read"]);
     expect(res.isError).toBe(true);
     expect(stored(URGENT).agentState).toBe("ready");
+  });
+
+  it("returns { task: null } when nothing is waiting", async () => {
+    for (const t of db.tasks) if (t.agentState === "ready") t.agentState = null;
+    const res = await call("claim_task", {}, ["tasks:agent"]);
+    expect(JSON.parse(res.content[0].text)).toEqual({ task: null });
+  });
+
+  it("finishes and claims the next ready task in one call with next: true", async () => {
+    const first = JSON.parse((await call("claim_task", {}, ["tasks:agent"])).content[0].text);
+    const res = await call(
+      "finish_task",
+      { id: first.task.id, claimId: first.claimId, report: "Done.", next: true },
+      ["tasks:agent"],
+    );
+    expect(res.isError).toBeFalsy();
+    const body = JSON.parse(res.content[0].text);
+    expect(body.task).toMatchObject({ id: first.task.id, status: "completed", agentState: "done" });
+    expect(body.next.task.id).not.toBe(first.task.id);
+    expect(stored(body.next.task.id)).toMatchObject({ agentState: "working", claimId: body.next.claimId });
+  });
+
+  it("leaves next out unless asked, and returns { task } from every leaving move", async () => {
+    const first = JSON.parse((await call("claim_task", {}, ["tasks:agent"])).content[0].text);
+    const asked = JSON.parse(
+      (await call("request_input", { id: first.task.id, claimId: first.claimId, question: "Which one?" }, ["tasks:agent"]))
+        .content[0].text,
+    );
+    expect(Object.keys(asked)).toEqual(["task"]);
+    expect(asked.task.agentState).toBe("needs_input");
+    const second = JSON.parse((await call("claim_task", {}, ["tasks:agent"])).content[0].text);
+    const released = JSON.parse(
+      (await call("release_task", { id: second.task.id, claimId: second.claimId }, ["tasks:agent"])).content[0].text,
+    );
+    expect(Object.keys(released)).toEqual(["task"]);
+    expect(released.task.agentState).toBe("ready");
+  });
+
+  it("asks and claims the next task with next: true, reporting { task: null } when the queue is empty", async () => {
+    const first = JSON.parse((await call("claim_task", { id: URGENT }, ["tasks:agent"])).content[0].text);
+    for (const t of db.tasks) if (t.agentState === "ready") t.agentState = null;
+    const body = JSON.parse(
+      (await call("request_input", { id: URGENT, claimId: first.claimId, question: "Which one?", next: true }, ["tasks:agent"]))
+        .content[0].text,
+    );
+    expect(body.task.agentState).toBe("needs_input");
+    expect(body.next).toEqual({ task: null });
   });
 
   it("lets a full-access connection use the hand-off too", async () => {
