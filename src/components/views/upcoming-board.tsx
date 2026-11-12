@@ -58,6 +58,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DoneByClaude } from "@/components/done-by-claude";
 import { AgentChip } from "@/components/agent-chip";
 import { EditTaskDialog } from "@/components/edit-task-dialog";
 import { useTimerControls } from "@/components/running-timer";
@@ -810,6 +811,7 @@ export function UpcomingBoard() {
   return (
     <div className="flex h-full flex-col p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">Upcoming</h1>
+      <DoneByClaude className="mb-4 shrink-0" />
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}

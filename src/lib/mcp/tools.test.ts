@@ -80,7 +80,7 @@ const READ_TOOLS = [
 /** The only writes that never overwrite or remove an existing row. */
 const ADDITIVE_TOOLS = ["create_task", "create_project", "add_review_note", "suggest_task"];
 /** Hand-off moves change only the agent's own state and log (docs/AGENT-TASKS.md). */
-const HANDOFF_TOOLS = ["claim_task", "log_task_progress", "request_input", "release_task"];
+const HANDOFF_TOOLS = ["claim_task", "log_task_progress", "request_input", "release_task", "finish_task"];
 
 /** Phrases that read as instructions to the model rather than facts about
  * the data. The connector directory rejects descriptions that steer the

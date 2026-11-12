@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { TASK_SELECT, taskToDTO } from "@/lib/data/tasks";
-import { stopTimerOnTasks } from "@/lib/data/timers";
 import type { AgentState, TaskActivityDTO, TaskDTO } from "@/lib/types";
 
 /**
@@ -26,7 +25,7 @@ export const AGENT_ERRORS = {
   notReady: "Task is not ready for the agent",
   claimedElsewhere: "Task is claimed by another run",
   claimLost: "This run no longer holds the claim on that task",
-  noQuestion: "Task is not waiting on an answer",
+  noQuestion: "Task is not waiting on a reply",
 } as const;
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -124,7 +123,11 @@ export async function takeBackFromAgent(userId: string, id: string): Promise<Tas
   });
 }
 
-/** The user's answer goes into the log and the task returns to the queue (AT4). */
+/**
+ * The user's reply goes into the log and the task returns to the queue: an
+ * answer to the agent's question (AT4), or a response to a finished task the
+ * user has not completed (AT8).
+ */
 export async function answerAgent(
   userId: string,
   id: string,
@@ -132,7 +135,12 @@ export async function answerAgent(
 ): Promise<TaskDTO> {
   return prisma.$transaction(async (tx) => {
     const { count } = await tx.task.updateMany({
-      where: { id, userId, agentState: "needs_input" },
+      where: {
+        id,
+        userId,
+        status: "active",
+        agentState: { in: ["needs_input", "done"] },
+      },
       data: { agentState: "ready", agentQuestion: null },
     });
     if (count === 0) {
@@ -328,34 +336,20 @@ export function releaseTask(
 }
 
 /**
- * Logs the report and completes the task (AT5). Completion follows
- * `setTaskStatus`: a running timer is stopped first.
+ * Logs the report and marks the task done by the agent (AT5). The task stays
+ * active: completing it is the user's review (AT8).
  */
-export async function finishTask(
+export function finishTask(
   userId: string,
   id: string,
   claimId: string,
   report: string,
 ): Promise<TaskDTO> {
-  const holder = await prisma.task.findFirst({
-    where: held(userId, id, claimId),
-    select: { id: true },
-  });
-  if (holder) await stopTimerOnTasks(userId, [id]);
-  return prisma.$transaction(async (tx) => {
-    const { count } = await tx.task.updateMany({
-      where: held(userId, id, claimId),
-      data: {
-        agentState: "done",
-        agentQuestion: null,
-        claimId: null,
-        claimExpiresAt: null,
-        status: "completed",
-        completedAt: new Date(),
-      },
-    });
-    if (count === 0) throw new Error(await claimLostReason(tx, userId, id));
-    await log(tx, userId, id, "agent", "report", report);
-    return reload(tx, userId, id);
-  });
+  return leaveWorking(
+    userId,
+    id,
+    claimId,
+    { agentState: "done" },
+    { kind: "report", content: report },
+  );
 }

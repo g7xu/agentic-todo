@@ -25,7 +25,7 @@ const AGENT_COLOR: Record<AgentState, string> = {
 /** The chip on a list row or board card; nothing for a task Claude leaves alone. */
 export function AgentChip({ task }: { task: TaskDTO }) {
   if (!task.agentState) return null;
-  // On a finished task only "Done by Claude" still says something true.
+  // On a completed task only "Done by Claude" still says something true.
   if (task.status !== "active" && task.agentState !== "done") return null;
   return (
     <span

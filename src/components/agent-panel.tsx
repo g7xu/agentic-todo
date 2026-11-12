@@ -17,7 +17,7 @@ import type { TaskActivityDTO, TaskDTO } from "@/lib/types";
 const KIND_LABEL: Record<TaskActivityDTO["kind"], string> = {
   progress: "Progress",
   question: "Question",
-  answer: "Your answer",
+  answer: "Your reply",
   report: "Report",
   released: "Put back",
 };
@@ -49,6 +49,14 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
   const canHand =
     active && !isRoutineDay && (state === null || state === "suggested" || state === "done");
   const canTakeBack = state === "ready" || state === "working" || state === "needs_input";
+  // A reply returns the task to Claude's queue: an answer to its question, or
+  // a response to work it finished that the user has not completed (AT8).
+  const replyPrompt =
+    state === "needs_input"
+      ? task.agentQuestion
+      : state === "done" && active
+        ? "Not right yet? Reply to send it back to Claude, or complete the task to close it."
+        : null;
 
   if (isRoutineDay && state === null) return null;
 
@@ -95,15 +103,15 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
         </p>
       )}
 
-      {state === "needs_input" && task.agentQuestion && (
+      {replyPrompt && (
         <div className="grid gap-1.5">
           <Label htmlFor={`answer-${task.id}`} className="whitespace-pre-wrap">
-            {task.agentQuestion}
+            {replyPrompt}
           </Label>
           <Textarea
             id={`answer-${task.id}`}
             value={answer}
-            placeholder="Your answer"
+            placeholder="Your reply"
             onChange={(e) => setAnswer(e.target.value)}
           />
           <Button
@@ -117,7 +125,7 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
               )
             }
           >
-            Send answer
+            {state === "done" ? "Send back to Claude" : "Send answer"}
           </Button>
         </div>
       )}
