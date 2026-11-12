@@ -306,10 +306,27 @@ describe("working a claimed task", () => {
   it("finishes with a report in the log and the description untouched", async () => {
     const c = (await claimTask(USER, { id: URGENT }))!;
     const done = await finishTask(USER, URGENT, c.claimId, "Booked nothing; drafted the email");
-    expect(done).toMatchObject({ status: "completed", agentState: "done", description: "Jason's notes" });
-    expect(stored(URGENT)).toMatchObject({ claimId: null, completedAt: NOW });
-    expect(stopTimerOnTasks).toHaveBeenCalledWith(USER, [URGENT]);
+    expect(done).toMatchObject({ status: "active", agentState: "done", description: "Jason's notes" });
+    expect(stored(URGENT)).toMatchObject({ claimId: null, completedAt: null });
     expect(logOf(URGENT)).toEqual([["agent", "report", "Booked nothing; drafted the email"]]);
+  });
+
+  it("sends a finished task back to the queue when the user replies to its report", async () => {
+    const c = (await claimTask(USER, { id: URGENT }))!;
+    await finishTask(USER, URGENT, c.claimId, "Drafted the email");
+    const back = await answerAgent(USER, URGENT, "Shorter, and cc Sam");
+    expect(back).toMatchObject({ status: "active", agentState: "ready" });
+    expect(logOf(URGENT)).toEqual([
+      ["agent", "report", "Drafted the email"],
+      ["user", "answer", "Shorter, and cc Sam"],
+    ]);
+  });
+
+  it("refuses a reply once the user has completed the finished task", async () => {
+    const c = (await claimTask(USER, { id: URGENT }))!;
+    await finishTask(USER, URGENT, c.claimId, "Drafted the email");
+    stored(URGENT).status = "completed";
+    await expect(answerAgent(USER, URGENT, "More")).rejects.toThrow(AGENT_ERRORS.noQuestion);
   });
 
   it("puts a released task back in the queue with a note for the next run", async () => {
@@ -420,7 +437,7 @@ describe("hand-off tools", () => {
     );
     expect(res.isError).toBeFalsy();
     const body = JSON.parse(res.content[0].text);
-    expect(body.task).toMatchObject({ id: first.task.id, status: "completed", agentState: "done" });
+    expect(body.task).toMatchObject({ id: first.task.id, status: "active", agentState: "done" });
     expect(body.next.task.id).not.toBe(first.task.id);
     expect(stored(body.next.task.id)).toMatchObject({ agentState: "working", claimId: body.next.claimId });
   });

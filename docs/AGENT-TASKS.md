@@ -21,7 +21,7 @@ until the user hands them over.
   be handed over: their date and outcome are the routine's.
 - **AT2 — One state field, five values.** `suggested` (the agent proposed it), `ready` (waiting
   for a run), `working` (claimed), `needs_input` (waiting on the user's answer), `done` (the agent
-  finished and reported). A CHECK constraint holds the vocabulary.
+  finished and reported; the task stays active until the user reviews it, AT8). A CHECK constraint holds the vocabulary.
 - **AT3 — Claims are a compare-and-set with a lease.** `claim_task` sets `working`, a fresh
   `claimId` and `claimExpiresAt` in one conditional `updateMany` whose `where` is "ready, or
   working with a lapsed lease". Of two racing runs exactly one gets `count = 1`. Every later write
@@ -36,7 +36,7 @@ until the user hands them over.
   the recent log, so the run sees the answer.
 - **AT5 — Reports live in an append-only log.** `task_activities` (author `agent` | `user`, kind
   `progress` | `question` | `answer` | `report` | `released`). `finish_task` logs the report and
-  completes the task in one transaction, stopping a running timer first as `setTaskStatus` does.
+  sets `done` in one transaction; it does not complete the task (AT8).
   The description stays the user's: no hand-off tool writes it.
 - **AT6 — Suggestions are inert.** `suggest_task` creates a task with `agentState = suggested`.
   It is not claimable; "Let Claude do it" in the dialog makes it `ready`. A suggestion the user
@@ -46,6 +46,12 @@ until the user hands them over.
   consent page offers "Agent hand-off only", which swaps `tasks:write` for `tasks:agent` in the
   grant (a strict narrowing, since write already allows the hand-off). Unticked, consent behaves as
   before, and a request with no `scope` still gets `tasks:read tasks:write`.
+
+- **AT8 — The user closes what the agent finished.** A `done` task stays active. "Done by Claude"
+  at the top of the Upcoming board lists every active `done` task from all projects; opening one
+  shows its report. It leaves the list when the user completes it, or replies: the reply is logged
+  as an answer and the task returns to `ready`, so the next claim reads it. "Take back" also
+  clears it. Re-opening a completed `done` task lists it again.
 
 ## 3. Tools
 
@@ -57,11 +63,11 @@ until the user hands them over.
 | `log_task_progress` | agent | add a progress note, renew the lease |
 | `request_input` | agent | park the task on the user with one question; `next: true` also claims the next ready task |
 | `release_task` | agent | put the task back to `ready`, with an optional note |
-| `finish_task` | agent | log the report and complete the task; `next: true` also claims the next ready task |
+| `finish_task` | agent | log the report and mark the task `done`, left active for the user's review; `next: true` also claims the next ready task |
 | `suggest_task` | agent | create a task marked `suggested` |
 
-Hand-off tools are annotated `destructiveHint: false` except `finish_task`, which completes the
-task like `complete_tasks`.
+Hand-off tools are annotated `destructiveHint: false`: they change only the agent's state and
+log.
 
 ## 4. A scheduled run
 

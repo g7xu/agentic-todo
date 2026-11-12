@@ -90,7 +90,7 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - Closing a week makes its board read-only, turns up to ${MAX_CARRIED} chosen action notes into Inbox tasks planned for the next Sunday, and moves unsorted notes to the next open week. There is no reopen.
 - Writes take effect immediately; the server keeps no drafts and has no undo.
 - complete_tasks, reschedule_tasks and delete_tasks take 1 to 100 ids and report which ids were applied and which were skipped, with a reason.
-- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. finish_task and request_input with next: true also claim the following ready task in the same call. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
+- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. finish_task and request_input with next: true also claim the following ready task in the same call. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "done" tasks were finished by a run and stay active until the user completes them; a reply from the user instead returns the task to "ready" with the reply in its log. "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
 
 const WRITE_SCOPE = "tasks:write";
 /** The hand-off tools alone: no general edits and no deletes (docs/AGENT-TASKS.md AT7). */
@@ -494,8 +494,8 @@ export function registerTools(server: McpServer): void {
     "finish_task",
     {
       title: "Finish task",
-      annotations: CHANGE,
-      description: `Complete a claimed task and add the report to its log: what was done, the answer, and links to anything made. The task's description is left unchanged. Returns { task }. ${NEXT_NOTE}`,
+      annotations: HANDOFF,
+      description: `Mark a claimed task done and add the report to its log: what was done, the answer, and links to anything made. The task stays active for the user to review: they complete it, or reply, which returns it to ready with the reply in the log. The task's description is left unchanged. Returns { task }. ${NEXT_NOTE}`,
       inputSchema: z.object({ ...claimInput, report: logText, next: nextInput }),
     },
     (args, ctx) =>

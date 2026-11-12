@@ -60,8 +60,8 @@ disappears.
 | `close_review` | `close_review` | week, carry | same | the closed board | same |
 
 Scopes and annotations are unchanged: the id-list task tools need `tasks:write` and stay
-destructive, the hand-off tools still accept `tasks:agent`, and `finish_task` is still annotated
-destructive because it completes the task.
+destructive, and the hand-off tools still accept `tasks:agent`. (`finish_task` was annotated destructive while
+it completed the task; it no longer does, see AGENT-TASKS.md AT8.)
 
 ## Behaviour that moved
 
