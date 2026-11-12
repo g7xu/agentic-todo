@@ -40,7 +40,7 @@ function useAgentWrite<V>(fn: (v: V) => Promise<TaskDTO>, failure: string) {
 }
 
 export function useHandToAgent() {
-  return useAgentWrite((id: string) => handToAgentAction(id), "Couldn't hand the task to Claude");
+  return useAgentWrite((id: string) => handToAgentAction(id), "Couldn't hand the task to the AI agent");
 }
 
 export function useTakeBackFromAgent() {

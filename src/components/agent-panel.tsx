@@ -33,7 +33,7 @@ function when(iso: string): string {
 
 /**
  * The hand-off section of the edit dialog (docs/AGENT-TASKS.md): hand the
- * task to Claude or take it back, answer its question, and read its log.
+ * task to the agent or take it back, answer its question, and read its log.
  * The log is the agent's report; the description above stays the user's.
  */
 export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
@@ -49,13 +49,13 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
   const canHand =
     active && !isRoutineDay && (state === null || state === "suggested" || state === "done");
   const canTakeBack = state === "ready" || state === "working" || state === "needs_input";
-  // A reply returns the task to Claude's queue: an answer to its question, or
+  // A reply returns the task to the agent's queue: an answer to its question, or
   // a response to work it finished that the user has not completed (AT8).
   const replyPrompt =
     state === "needs_input"
       ? task.agentQuestion
       : state === "done" && active
-        ? "Not right yet? Reply to send it back to Claude, or complete the task to close it."
+        ? "Not right yet? Reply to send it back to the AI agent, or complete the task to close it."
         : null;
 
   if (isRoutineDay && state === null) return null;
@@ -65,7 +65,7 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-sm font-medium">
           <Bot className="size-4" />
-          {state ? AGENT_LABEL[state] : "Claude"}
+          {state ? AGENT_LABEL[state] : "AI agent"}
         </span>
         <div className="flex gap-2">
           {canHand && (
@@ -75,7 +75,7 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
               disabled={hand.isPending}
               onClick={() => hand.mutate(task.id)}
             >
-              {state === "suggested" ? "Let Claude do it" : "Hand to Claude"}
+              {state === "suggested" ? "Let AI agent do it" : "Hand to AI agent"}
             </Button>
           )}
           {canTakeBack && (
@@ -93,13 +93,13 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
 
       {state === null && canHand && (
         <p className="text-muted-foreground text-xs">
-          Claude works only the tasks you hand to it, and asks you here when it
-          needs something.
+          An AI agent works only the tasks you hand to it, and asks you here when
+          it needs something.
         </p>
       )}
       {state === "suggested" && (
         <p className="text-muted-foreground text-xs">
-          Claude added this. It won&apos;t start until you hand it over.
+          An AI agent added this. It won&apos;t start until you hand it over.
         </p>
       )}
 
@@ -125,7 +125,7 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
               )
             }
           >
-            {state === "done" ? "Send back to Claude" : "Send answer"}
+            {state === "done" ? "Send back to AI agent" : "Send answer"}
           </Button>
         </div>
       )}
