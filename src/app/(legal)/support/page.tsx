@@ -23,7 +23,7 @@ export default function SupportPage() {
       <h2>Connect a terminal agent</h2>
       <p>
         Add a remote (HTTP) MCP server named agentictodo with the URL below.
-        For example:
+        In Claude Code, for example:
       </p>
       <pre className="bg-muted mt-3 overflow-x-auto rounded-md p-3 font-mono text-sm">
         claude mcp add -s user --transport http agentictodo {mcpUrl}

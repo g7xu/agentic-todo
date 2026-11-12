@@ -92,7 +92,7 @@ export function Landing() {
             <h3 className="font-medium">Terminal agents</h3>
             <p className="text-muted-foreground text-sm">
               Add a remote (HTTP) MCP server named agentictodo with this URL.
-              For example:
+              In Claude Code, for example:
             </p>
             <Code>{`claude mcp add -s user --transport http agentictodo ${mcpUrl}`}</Code>
             <p className="text-muted-foreground text-sm">
