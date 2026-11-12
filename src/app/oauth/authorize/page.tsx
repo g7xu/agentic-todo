@@ -122,7 +122,7 @@ export default async function AuthorizePage({
   const redirectUrl = new URL(request.redirect_uri);
   const redirectHost = redirectUrl.host;
   // A loopback redirect means the client is a program on this computer
-  // (Claude Code, a desktop app); naming the address alone reads as an error.
+  // (a terminal agent, a desktop app); naming the address alone reads as an error.
   const toThisComputer = isLoopbackUri(redirectUrl);
   const hidden = {
     client_id: request.client_id,
@@ -193,7 +193,7 @@ export default async function AuthorizePage({
             <>
               After you approve, you will be returned to an app running on this
               computer (<span className="font-mono">{redirectHost}</span>), such
-              as Claude Code in your terminal. Only connect if you just started
+              as an AI agent in your terminal. Only connect if you just started
               this from that app.
             </>
           ) : (

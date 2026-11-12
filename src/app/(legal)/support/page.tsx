@@ -16,33 +16,34 @@ export default function SupportPage() {
       <p>
         Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. One
         person runs agenticTODO and reads every message, so a reply can take a
-        few days. Say which app you were using (for example Claude Code or
-        claude.ai), what you expected, and what happened instead.
+        few days. Say which AI agent or app you were using, what you
+        expected, and what happened instead.
       </p>
 
-      <h2>Connect Claude Code</h2>
-      <p>Register the server once:</p>
+      <h2>Connect a terminal agent</h2>
+      <p>
+        Add a remote (HTTP) MCP server named agentictodo with the URL below.
+        In Claude Code, for example:
+      </p>
       <pre className="bg-muted mt-3 overflow-x-auto rounded-md p-3 font-mono text-sm">
         claude mcp add -s user --transport http agentictodo {mcpUrl}
       </pre>
       <p>
-        Then run <code className="font-mono">/mcp</code> in Claude Code, choose{" "}
-        <strong>agentictodo</strong>, then <strong>Authenticate</strong>, and
-        approve the request in your browser.
+        Then authenticate the <strong>agentictodo</strong> server from your
+        agent&apos;s MCP settings and approve the request in your browser.
       </p>
 
-      <h2>Connect claude.ai</h2>
+      <h2>Connect a chat app</h2>
       <p>
-        Go to Customize → Connectors → Add custom connector, enter{" "}
+        In the app&apos;s connector settings, add a custom connector, enter{" "}
         <code className="font-mono break-all">{mcpUrl}</code>, and approve the
         request.
       </p>
 
-      <h2>Claude asks me to sign in again</h2>
+      <h2>My agent asks me to sign in again</h2>
       <p>
-        A connection that goes unused for 30 days expires. Run{" "}
-        <code className="font-mono">/mcp</code> and choose{" "}
-        <strong>Authenticate</strong> again.
+        A connection that goes unused for 30 days expires. Authenticate the
+        server again from your agent&apos;s MCP settings.
       </p>
 
       <h2>Disconnect an app</h2>

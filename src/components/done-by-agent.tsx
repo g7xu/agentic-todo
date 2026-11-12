@@ -7,12 +7,12 @@ import { useProjects } from "@/hooks/use-projects";
 import { useTasks } from "@/hooks/use-tasks";
 
 /**
- * The tasks Claude finished that the user has not closed yet, from every
+ * The tasks the agent finished that the user has not closed yet, from every
  * project (docs/AGENT-TASKS.md AT8). Opening a row shows the report and the
  * reply box; completing the task or replying takes it off the list. Renders
  * nothing when there is nothing to review.
  */
-export function DoneByClaude({ className }: { className?: string }) {
+export function DoneByAgent({ className }: { className?: string }) {
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
   const [open, setOpen] = useState(true);
@@ -24,7 +24,7 @@ export function DoneByClaude({ className }: { className?: string }) {
 
   const Chevron = open ? ChevronDown : ChevronRight;
   return (
-    <section className={className} aria-label="Done by Claude">
+    <section className={className} aria-label="Done by AI agent">
       <button
         className="text-muted-foreground hover:text-foreground mb-2 flex items-center gap-1.5 text-sm"
         aria-expanded={open}
@@ -32,7 +32,7 @@ export function DoneByClaude({ className }: { className?: string }) {
       >
         <Chevron className="size-4" />
         <Bot className="size-4" />
-        Done by Claude, waiting for your review ({done.length})
+        Done by AI agent, waiting for your review ({done.length})
       </button>
       {open && (
         <div className="flex items-start gap-3 overflow-x-auto pb-2">

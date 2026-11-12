@@ -8,7 +8,7 @@ Companion docs: [MCP.md](./MCP.md) · [AGENT.md](./AGENT.md)
 
 ## 1. Summary
 
-A connected agent (Claude, running on a schedule) works the tasks the user hands to it and leaves
+A connected AI agent (any MCP client, running on a schedule) works the tasks the user hands to it and leaves
 every other task alone. It claims a task before working it, so two runs never work the same one;
 it parks a task on the user with one question when it needs a decision; it reports in a log on
 the task rather than in the description; and it may suggest new tasks, which it does not work
@@ -16,7 +16,7 @@ until the user hands them over.
 
 ## 2. Decisions
 
-- **AT1 — The user hands tasks over.** `agentState` is null on an ordinary task. "Hand to Claude"
+- **AT1 — The user hands tasks over.** `agentState` is null on an ordinary task. "Hand to AI agent"
   in the edit dialog sets it to `ready`; "Take back" clears it from any state. Routine days cannot
   be handed over: their date and outcome are the routine's.
 - **AT2 — One state field, five values.** `suggested` (the agent proposed it), `ready` (waiting
@@ -39,7 +39,7 @@ until the user hands them over.
   sets `done` in one transaction; it does not complete the task (AT8).
   The description stays the user's: no hand-off tool writes it.
 - **AT6 — Suggestions are inert.** `suggest_task` creates a task with `agentState = suggested`.
-  It is not claimable; "Let Claude do it" in the dialog makes it `ready`. A suggestion the user
+  It is not claimable; "Let AI agent do it" in the dialog makes it `ready`. A suggestion the user
   wants to do themselves stays theirs; one they do not want is deleted like any task.
 - **AT7 — Scope `tasks:agent` for unattended connections.** The hand-off tools accept
   `tasks:agent` or `tasks:write`; the general edit and delete tools still need `tasks:write`. The
@@ -47,7 +47,7 @@ until the user hands them over.
   grant (a strict narrowing, since write already allows the hand-off). Unticked, consent behaves as
   before, and a request with no `scope` still gets `tasks:read tasks:write`.
 
-- **AT8 — The user closes what the agent finished.** A `done` task stays active. "Done by Claude"
+- **AT8 — The user closes what the agent finished.** A `done` task stays active. "Done by AI agent"
   at the top of the Upcoming board lists every active `done` task from all projects; opening one
   shows its report. It leaves the list when the user completes it, or replies: the reply is logged
   as an answer and the task returns to `ready`, so the next claim reads it. "Take back" also
