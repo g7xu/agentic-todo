@@ -61,9 +61,8 @@ export function Landing() {
         </p>
         <p className="mt-6 max-w-2xl text-base leading-relaxed text-pretty sm:text-lg">
           agenticTODO holds your tasks, projects and routines and never calls a
-          model. Connect the agent you already work in, Claude Code or
-          claude.ai, and it reads and edits your list through a remote MCP
-          server behind real OAuth. It stays free because there is no AI bill
+          model. Connect the AI agent you already work in, and it reads and
+          edits your list through a remote MCP server behind real OAuth. It stays free because there is no AI bill
           to pass on.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
@@ -90,26 +89,28 @@ export function Landing() {
         <h2 className="text-2xl font-semibold tracking-tight">Connect your agent</h2>
         <div className="mt-8 grid gap-10 md:grid-cols-2">
           <div className="grid content-start gap-3">
-            <h3 className="font-medium">Claude Code</h3>
-            <p className="text-muted-foreground text-sm">Register the server once, for all your projects:</p>
+            <h3 className="font-medium">Terminal agents</h3>
+            <p className="text-muted-foreground text-sm">
+              Add a remote (HTTP) MCP server named agentictodo with this URL.
+              For example:
+            </p>
             <Code>{`claude mcp add -s user --transport http agentictodo ${mcpUrl}`}</Code>
             <p className="text-muted-foreground text-sm">
-              Then run <code className="font-mono">/mcp</code>, choose{" "}
-              <strong>agentictodo</strong> → <strong>Authenticate</strong>, and
-              approve in your browser. Signing in there creates your account if
-              you don&apos;t have one.
+              Then authenticate the <strong>agentictodo</strong> server from your
+              agent&apos;s MCP settings and approve in your browser. Signing in
+              there creates your account if you don&apos;t have one.
             </p>
           </div>
           <div className="grid content-start gap-3">
-            <h3 className="font-medium">claude.ai</h3>
+            <h3 className="font-medium">Chat apps</h3>
             <p className="text-muted-foreground text-sm">
-              Customize → Connectors → Add custom connector, and enter:
+              In the app&apos;s connector settings, add a custom connector and
+              enter:
             </p>
             <Code>{mcpUrl}</Code>
             <p className="text-muted-foreground text-sm">
-              Choose <strong>Sign in now</strong> and approve. Other MCP clients
-              that support OAuth should connect the same way; Claude Code and
-              claude.ai are the ones we test.
+              Sign in when asked and approve. Any MCP client that supports
+              remote servers with OAuth should connect the same way.
             </p>
           </div>
         </div>

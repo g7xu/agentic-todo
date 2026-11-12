@@ -48,7 +48,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Connected apps:</strong> for each app you authorize through
-          MCP, such as Claude, its name, the permissions you granted, and when
+          MCP, such as an AI agent, its name, the permissions you granted, and when
           it was connected and last used. The access tokens we issue to it
           are stored only in hashed form.
         </li>
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
 
       <h2>Apps you connect</h2>
       <p>
-        When you connect an app such as Claude, it can read and change your
+        When you connect an app such as an AI agent, it can read and change your
         tasks, projects and routines within the permissions you approve. What
         that app does with the data, including any AI processing, is governed
         by its provider&apos;s own privacy policy, not this one. You can

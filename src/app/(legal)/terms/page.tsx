@@ -36,7 +36,7 @@ export default function TermsPage() {
 
       <h2>Connected apps</h2>
       <p>
-        You can authorize apps, such as Claude, to read and change your data
+        You can authorize apps, such as AI agents, to read and change your data
         through MCP. Those apps act on your instructions and under their own
         providers&apos; terms. We are not responsible for what a connected app
         does with your data or your account, including changes or deletions it
