@@ -47,9 +47,10 @@ until the user hands them over.
   grant (a strict narrowing, since write already allows the hand-off). Unticked, consent behaves as
   before, and a request with no `scope` still gets `tasks:read tasks:write`.
 
-- **AT8 — The user closes what the agent finished.** A `done` task stays active. "Done by AI agent"
-  at the top of the Upcoming board lists every active `done` task from all projects; opening one
-  shows its report. It leaves the list when the user completes it, or replies: the reply is logged
+- **AT8 — The user closes what the agent finished.** A `done` task stays active. "AI agent is
+  waiting on you" at the top of the Upcoming board lists every active task from all projects
+  whose next step is the user's: `needs_input` tasks first, then `done` ones. Opening one shows
+  its question or report. A `done` task leaves the list when the user completes it, or replies: the reply is logged
   as an answer and the task returns to `ready`, so the next claim reads it. "Take back" also
   clears it. Re-opening a completed `done` task lists it again.
 
