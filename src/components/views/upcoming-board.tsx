@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type SyntheticEvent } from "react";
 import {
   closestCorners,
   DndContext,
@@ -338,6 +338,32 @@ function TaskCard({
   );
 }
 
+/**
+ * Drag-sensor listeners that ignore events from portaled descendants.
+ *
+ * The edit dialog and the options menu are portaled but render inside the
+ * card's component tree, so their events bubble to the card in React. Left
+ * unfiltered, a press inside the dialog arms the drag sensor: drift 5px and
+ * the card behind it is dragged, closing the dialog unsaved and rescheduling
+ * the task on drop.
+ *
+ * Every listener is wrapped, whatever its event name, because which events
+ * arm a drag is decided by the sensors the board registers.
+ */
+function physicallyInside(
+  listeners: ReturnType<typeof useSortable>["listeners"],
+) {
+  if (!listeners) return undefined;
+  return Object.fromEntries(
+    Object.entries(listeners).map(([name, handler]) => [
+      name,
+      (e: SyntheticEvent<HTMLElement>) => {
+        if (e.currentTarget.contains(e.target as Node)) handler(e);
+      },
+    ]),
+  );
+}
+
 function SortableTask({
   task,
   projects,
@@ -362,18 +388,7 @@ function SortableTask({
         isDragging && "opacity-40",
       )}
       {...attributes}
-      {...listeners}
-      onPointerDown={(e) => {
-        // The edit dialog is portaled but renders inside this component tree,
-        // so its pointer events BUBBLE here in React and would arm the drag
-        // sensor — press a non-interactive spot in the dialog, drift 5px, and
-        // the card behind it gets dragged (closing the dialog unsaved and
-        // rescheduling the task on drop). Same physical-containment guard as
-        // TaskCard's click-to-edit: only presses actually inside the card may
-        // start a drag.
-        if (!e.currentTarget.contains(e.target as Node)) return;
-        listeners?.onPointerDown?.(e);
-      }}
+      {...physicallyInside(listeners)}
     >
       <TaskCard task={task} projects={projects} showDue={showDue} />
     </div>
