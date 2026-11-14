@@ -29,6 +29,7 @@ import {
 import { DurationPicker } from "@/components/duration-picker";
 import { AgentPanel } from "@/components/agent-panel";
 import { insertNewlineAtCursor } from "@/lib/textarea";
+import { cn } from "@/lib/utils";
 import type { ProjectDTO, TaskDTO } from "@/lib/types";
 
 const PRIORITIES = [
@@ -63,6 +64,12 @@ export function EditTaskDialog({
   // A routine row records one routine on one day, so its date and project are
   // fixed. The server rejects a change to either; both fields are read-only.
   const isRoutineDay = task.routineId !== null;
+
+  // A task in the agent's hands carries a conversation as long as the form
+  // itself. From `md` up the two sit side by side and scroll separately, so
+  // neither pushes the other out of view; below that they stack and the
+  // dialog scrolls as one.
+  const twoPane = task.agentState !== null;
 
   function edits() {
     return {
@@ -114,11 +121,27 @@ export function EditTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        className={cn(
+          twoPane && "md:flex md:max-w-3xl md:flex-col md:overflow-hidden",
+        )}
+      >
         <DialogHeader>
           <DialogTitle>Edit task</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        <div
+          className={cn(
+            "grid gap-4 py-2",
+            twoPane && "md:flex md:min-h-0 md:flex-1",
+          )}
+        >
+          <div
+            className={cn(
+              "grid content-start gap-4",
+              // The padding keeps focus rings clear of the scroll clip.
+              twoPane && "md:-m-1 md:min-h-0 md:flex-1 md:overflow-y-auto md:p-1",
+            )}
+          >
           <div className="grid gap-1.5">
             <Label htmlFor="content">Title</Label>
             <Input
@@ -231,7 +254,12 @@ export function EditTaskDialog({
               </Select>
             </div>
           </div>
-          <AgentPanel task={task} open={open} />
+          </div>
+          <AgentPanel
+            task={task}
+            open={open}
+            className={cn(twoPane && "md:min-h-0 md:flex-1")}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
