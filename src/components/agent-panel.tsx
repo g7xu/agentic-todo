@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AGENT_LABEL } from "@/components/agent-chip";
+import { Linkified } from "@/components/linkified";
+import { cn } from "@/lib/utils";
 import {
   useAnswerAgent,
   useHandToAgent,
@@ -34,9 +36,22 @@ function when(iso: string): string {
 /**
  * The hand-off section of the edit dialog (docs/AGENT-TASKS.md): hand the
  * task to the agent or take it back, answer its question, and read its log.
- * The log is the agent's report; the description above stays the user's.
+ * The log is the agent's report; the description stays the user's.
+ *
+ * Given a bounded height at `md` and up, the panel reads as a thread: the log
+ * scrolls, opening at its newest entry, and the reply box stays in view under
+ * it. Unbounded, it grows with its content and the reply box comes first, so
+ * answering never means scrolling past the history.
  */
-export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
+export function AgentPanel({
+  task,
+  open,
+  className,
+}: {
+  task: TaskDTO;
+  open: boolean;
+  className?: string;
+}) {
   const hand = useHandToAgent();
   const takeBack = useTakeBackFromAgent();
   const reply = useAnswerAgent();
@@ -58,10 +73,22 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
         ? "Not right yet? Reply to send it back to the AI agent, or complete the task to close it."
         : null;
 
+  // The open question is drawn once, over the reply box. It has to live there
+  // rather than in the log, which may still be loading or have failed.
+  const entries = (log.data ?? []).filter(
+    (e, i, all) =>
+      !(
+        state === "needs_input" &&
+        i === all.length - 1 &&
+        e.kind === "question" &&
+        e.content === task.agentQuestion
+      ),
+  );
+
   if (isRoutineDay && state === null) return null;
 
   return (
-    <div className="grid gap-2 rounded-md border p-3">
+    <div className={cn("flex min-w-0 flex-col gap-3 rounded-md border p-3", className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-sm font-medium">
           <Bot className="size-4" />
@@ -104,9 +131,15 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
       )}
 
       {replyPrompt && (
-        <div className="grid gap-1.5">
-          <Label htmlFor={`answer-${task.id}`} className="whitespace-pre-wrap">
-            {replyPrompt}
+        <div className="grid shrink-0 gap-1.5 md:order-last md:border-t md:pt-3">
+          <Label
+            htmlFor={`answer-${task.id}`}
+            className={cn(
+              "leading-snug whitespace-pre-wrap wrap-break-word",
+              state !== "needs_input" && "text-muted-foreground font-normal",
+            )}
+          >
+            <Linkified text={replyPrompt} />
           </Label>
           <Textarea
             id={`answer-${task.id}`}
@@ -130,17 +163,29 @@ export function AgentPanel({ task, open }: { task: TaskDTO; open: boolean }) {
         </div>
       )}
 
-      {log.data && log.data.length > 0 && (
-        <ol className="grid max-h-56 gap-2 overflow-y-auto text-sm">
-          {log.data.map((e) => (
-            <li key={e.id} className="grid gap-0.5">
-              <span className="text-muted-foreground text-xs">
-                {KIND_LABEL[e.kind]} · {when(e.createdAt)}
-              </span>
-              <span className="whitespace-pre-wrap wrap-break-word">{e.content}</span>
-            </li>
-          ))}
-        </ol>
+      {entries.length > 0 && (
+        // A reversed column starts scrolled to its end, which is the newest
+        // entry. The list's auto margin keeps a short log at the top.
+        <div className="flex min-h-0 flex-1 flex-col-reverse md:overflow-y-auto">
+          <ol className="mb-auto flex flex-col gap-3 text-sm">
+            {entries.map((e) => (
+              <li
+                key={e.id}
+                className={cn(
+                  "grid min-w-0 gap-0.5",
+                  e.author === "user" && "bg-muted rounded-md px-2 py-1.5",
+                )}
+              >
+                <span className="text-muted-foreground text-xs">
+                  {KIND_LABEL[e.kind]} · {when(e.createdAt)}
+                </span>
+                <span className="min-w-0 whitespace-pre-wrap wrap-break-word">
+                  <Linkified text={e.content} />
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </div>
   );
