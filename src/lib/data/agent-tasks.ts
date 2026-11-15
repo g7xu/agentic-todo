@@ -82,20 +82,42 @@ export async function listTaskActivity(
 // --- the user's side ------------------------------------------------------
 
 /**
- * Hands a task to the agent (AT1), including accepting one it suggested and
- * handing back one it already finished. A task the agent is working or
- * waiting on is left as it is, so a second click changes nothing.
+ * Logged when a connection, rather than the app, puts a task in the queue
+ * (AT9), so the log shows which hand-offs came from an assistant acting on
+ * the user's word. Uses the existing 'progress' kind, which needs no migration.
  */
-export async function handToAgent(userId: string, id: string): Promise<TaskDTO> {
+export const CONNECTOR_HANDOFF_NOTE = "Handed to the agent through the connector.";
+
+/**
+ * Throws the error `handToAgent` would refuse with, without writing. Lets a
+ * caller that changes other fields in the same request check the hand-off
+ * first, so a refused hand-off leaves the task untouched.
+ */
+export async function assertHandable(userId: string, id: string): Promise<void> {
   const t = await prisma.task.findFirst({
     where: { id, userId },
-    select: { status: true, routineId: true, agentState: true },
+    select: { status: true, routineId: true },
   });
   if (!t) throw new Error(AGENT_ERRORS.notFound);
   if (t.routineId) throw new Error(AGENT_ERRORS.routine);
   if (t.status !== "active") throw new Error(AGENT_ERRORS.notActive);
+}
+
+/**
+ * Hands a task to the agent (AT1), including accepting one it suggested and
+ * handing back one it already finished. A task the agent is working or
+ * waiting on is left as it is, so a second click changes nothing.
+ *
+ * `opts.note` is logged only when the state actually moved to 'ready' (AT9).
+ */
+export async function handToAgent(
+  userId: string,
+  id: string,
+  opts: { note?: string } = {},
+): Promise<TaskDTO> {
+  await assertHandable(userId, id);
   return prisma.$transaction(async (tx) => {
-    await tx.task.updateMany({
+    const { count } = await tx.task.updateMany({
       where: {
         id,
         userId,
@@ -104,6 +126,7 @@ export async function handToAgent(userId: string, id: string): Promise<TaskDTO> 
       },
       data: { agentState: "ready" },
     });
+    if (count === 1 && opts.note) await log(tx, userId, id, "agent", "progress", opts.note);
     return reload(tx, userId, id);
   });
 }
