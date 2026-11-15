@@ -15,6 +15,7 @@ type ListedTool = {
   title?: string;
   description?: string;
   annotations?: Record<string, unknown>;
+  inputSchema?: { properties?: Record<string, Record<string, unknown>> };
 };
 
 /** What a client sees: the server's initialize result and its tool list. */
@@ -168,6 +169,16 @@ describe("MCP tool surface", () => {
     for (const t of tools) {
       expect(t.description, t.name).not.toMatch(DIRECTIVE);
     }
+  });
+
+  it("lets create_task and update_task hand a task to the agent, with true as the only value", async () => {
+    const { tools } = await listTools();
+    for (const name of ["create_task", "update_task"]) {
+      const prop = tools.find((t) => t.name === name)?.inputSchema?.properties?.handToAgent;
+      expect(prop, name).toMatchObject({ type: "boolean", const: true });
+    }
+    const suggest = tools.find((t) => t.name === "suggest_task")?.inputSchema?.properties ?? {};
+    expect(suggest).not.toHaveProperty("handToAgent");
   });
 
   it("offers the weekly review prompt, naming only tools that exist", async () => {

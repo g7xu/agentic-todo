@@ -6,8 +6,11 @@ import type {
 import { z, ZodError } from "zod";
 import {
   AGENT_ERRORS,
+  assertHandable,
   claimTask,
+  CONNECTOR_HANDOFF_NOTE,
   finishTask,
+  handToAgent,
   listTaskActivity,
   logProgress,
   MAX_LEASE_MIN,
@@ -90,7 +93,7 @@ export const INSTRUCTIONS = `agenticTODO: the user's personal task system.
 - Closing a week makes its board read-only, turns up to ${MAX_CARRIED} chosen action notes into Inbox tasks planned for the next Sunday, and moves unsorted notes to the next open week. There is no reopen.
 - Writes take effect immediately; the server keeps no drafts and has no undo.
 - complete_tasks, reschedule_tasks and delete_tasks take 1 to 100 ids and report which ids were applied and which were skipped, with a reason.
-- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. finish_task and request_input with next: true also claim the following ready task in the same call. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "done" tasks were finished by a run and stay active until the user completes them; a reply from the user instead returns the task to "ready" with the reply in its log. "suggested" tasks came from suggest_task and become "ready" only when the user hands them over. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
+- Agent hand-off: agentState marks the tasks the user handed to an agent. "ready" tasks are waiting; claim_task gives one run a claimId that log_task_progress, request_input, release_task and finish_task require, so two runs cannot work the same task. finish_task and request_input with next: true also claim the following ready task in the same call. "needs_input" tasks wait on the user's answer to agentQuestion, which arrives in the task's log (get_task). "done" tasks were finished by a run and stay active until the user completes them; a reply from the user instead returns the task to "ready" with the reply in its log. "suggested" tasks came from suggest_task and become "ready" only when handed over: by the user in the app, or by create_task or update_task with handToAgent: true on a connection that holds tasks:write, which logs the hand-off. Tasks with no agentState belong to the user alone. Reports go in the log; the description stays the user's.`;
 
 const WRITE_SCOPE = "tasks:write";
 /** The hand-off tools alone: no general edits and no deletes (docs/AGENT-TASKS.md AT7). */
@@ -265,6 +268,15 @@ async function withNext(userId: string, task: Record<string, unknown>, next: boo
   }
 }
 
+/**
+ * Queues a task for the agent from a full-access connection (AT9). Only
+ * `true` is accepted: the other states are reached through the claim tools.
+ */
+const handToAgentInput = z
+  .literal(true)
+  .optional()
+  .describe("true puts the task in the agent's queue (agentState \"ready\").");
+
 export function registerTools(server: McpServer): void {
   server.registerTool(
     "list_tasks",
@@ -307,13 +319,16 @@ export function registerTools(server: McpServer): void {
       title: "Create task",
       annotations: ADD,
       description:
-        "Create one task. dueDate is the planned day; deadline is the hard due date. Omit projectId for the Inbox. Returns the task.",
-      inputSchema: createTaskSchema,
+        "Create one task. dueDate is the planned day; deadline is the hard due date. Omit projectId for the Inbox. handToAgent: true also puts the new task in the agent's queue as \"ready\" and logs the hand-off. Returns the task.",
+      inputSchema: createTaskSchema.extend({ handToAgent: handToAgentInput }),
     },
     (args, ctx) =>
-      run(ctx, { write: true }, async (userId) =>
-        compactTask(await createTask(userId, args)),
-      ),
+      run(ctx, { write: true }, async (userId) => {
+        const { handToAgent: handOff, ...fields } = args;
+        const task = await createTask(userId, fields);
+        if (!handOff) return compactTask(task);
+        return compactTask(await handToAgent(userId, task.id, { note: CONNECTOR_HANDOFF_NOTE }));
+      }),
   );
 
   server.registerTool(
@@ -322,13 +337,19 @@ export function registerTools(server: McpServer): void {
       title: "Update task",
       annotations: CHANGE,
       description:
-        "Change fields of one task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate. Returns the task.",
-      inputSchema: updateTaskSchema.extend({ id: taskIdSchema }),
+        "Change fields of one task. Pass null to clear a date, estimate or description. Routine-day tasks cannot change project or dueDate. handToAgent: true puts the task in the agent's queue as \"ready\", the same move as \"Hand to AI agent\" in the app, and logs the hand-off; a task the agent is working or waiting on stays as it is, and a routine day is refused before any field changes. Returns the task.",
+      inputSchema: updateTaskSchema.extend({ id: taskIdSchema, handToAgent: handToAgentInput }),
     },
     (args, ctx) =>
       run(ctx, { write: true }, async (userId) => {
-        const { id, ...fields } = args;
-        return compactTask(await updateTask(userId, id, fields));
+        const { id, handToAgent: handOff, ...fields } = args;
+        if (!handOff) return compactTask(await updateTask(userId, id, fields));
+        // Refuse the hand-off before writing anything, so a refusal changes nothing.
+        await assertHandable(userId, id);
+        if (Object.values(fields).some((v) => v !== undefined)) {
+          await updateTask(userId, id, fields);
+        }
+        return compactTask(await handToAgent(userId, id, { note: CONNECTOR_HANDOFF_NOTE }));
       }),
   );
 

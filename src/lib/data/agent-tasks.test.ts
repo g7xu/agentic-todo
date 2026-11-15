@@ -108,6 +108,13 @@ const db = vi.hoisted(() => {
         for (const t of hits) Object.assign(t, args.data);
         return { count: hits.length };
       },
+      update: async (args: { where: { id: string }; data: Partial<TaskRow> }) => {
+        await tick();
+        const hit = tasks.find((t) => t.id === args.where.id);
+        if (!hit) throw new Error("fake prisma: record to update not found");
+        Object.assign(hit, args.data);
+        return { ...hit };
+      },
       aggregate: async ({ where }: { where: Record<string, unknown> }) => {
         const orders = tasks.filter((t) => matches(t, where)).map((t) => t.order);
         return { _max: { order: orders.length ? Math.max(...orders) : null } };
@@ -157,6 +164,7 @@ import { registerTools } from "@/lib/mcp/tools";
 import {
   AGENT_ERRORS,
   answerAgent,
+  CONNECTOR_HANDOFF_NOTE,
   claimTask,
   finishTask,
   handToAgent,
@@ -362,6 +370,15 @@ describe("handToAgent", () => {
   it("refuses a routine day", async () => {
     await expect(handToAgent(USER, ROUTINE_DAY)).rejects.toThrow(AGENT_ERRORS.routine);
   });
+
+  it("logs a note only when the task actually moved to ready", async () => {
+    await handToAgent(USER, PERSONAL, { note: CONNECTOR_HANDOFF_NOTE });
+    expect(logOf(PERSONAL)).toEqual([["agent", "progress", CONNECTOR_HANDOFF_NOTE]]);
+    await handToAgent(USER, PERSONAL, { note: CONNECTOR_HANDOFF_NOTE });
+    expect(logOf(PERSONAL)).toHaveLength(1);
+    await handToAgent(USER, SUGGESTED);
+    expect(logOf(SUGGESTED)).toEqual([]);
+  });
 });
 
 // --- the MCP surface ------------------------------------------------------
@@ -467,6 +484,69 @@ describe("hand-off tools", () => {
     );
     expect(body.task.agentState).toBe("needs_input");
     expect(body.next).toEqual({ task: null });
+  });
+
+  it("creates a task already in the queue with handToAgent: true, logging the hand-off", async () => {
+    const res = await call(
+      "create_task",
+      { content: "Draft the landlord email", handToAgent: true },
+      ["tasks:read", "tasks:write"],
+    );
+    expect(res.isError).toBeFalsy();
+    const created = JSON.parse(res.content[0].text);
+    expect(created.agentState).toBe("ready");
+    expect(logOf(created.id)).toEqual([["agent", "progress", CONNECTOR_HANDOFF_NOTE]]);
+    const claimed = JSON.parse((await call("claim_task", { id: created.id }, ["tasks:agent"])).content[0].text);
+    expect(claimed.task.id).toBe(created.id);
+    expect(claimed.log.map((e: { content: string }) => e.content)).toEqual([CONNECTOR_HANDOFF_NOTE]);
+  });
+
+  it("creates an ordinary task when handToAgent is left out", async () => {
+    const res = await call("create_task", { content: "Buy milk" }, ["tasks:write"]);
+    const created = JSON.parse(res.content[0].text);
+    expect(stored(created.id).agentState).toBeNull();
+    expect(logOf(created.id)).toEqual([]);
+  });
+
+  it("hands a personal task or a suggestion over with update_task, changing fields in the same call", async () => {
+    const res = await call(
+      "update_task",
+      { id: PERSONAL, priority: 2, handToAgent: true },
+      ["tasks:read", "tasks:write"],
+    );
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(res.content[0].text)).toMatchObject({ id: PERSONAL, priority: 2, agentState: "ready" });
+    expect(logOf(PERSONAL)).toEqual([["agent", "progress", CONNECTOR_HANDOFF_NOTE]]);
+
+    const accepted = await call("update_task", { id: SUGGESTED, handToAgent: true }, ["tasks:write"]);
+    expect(JSON.parse(accepted.content[0].text).agentState).toBe("ready");
+  });
+
+  it("leaves a task the agent is working alone, and logs nothing", async () => {
+    const c = (await claimTask(USER, { id: URGENT }))!;
+    const res = await call("update_task", { id: URGENT, handToAgent: true }, ["tasks:write"]);
+    expect(JSON.parse(res.content[0].text).agentState).toBe("working");
+    expect(stored(URGENT).claimId).toBe(c.claimId);
+    expect(logOf(URGENT)).toEqual([]);
+  });
+
+  it("refuses to hand over a routine day before changing any field", async () => {
+    const res = await call(
+      "update_task",
+      { id: ROUTINE_DAY, content: "Renamed", handToAgent: true },
+      ["tasks:write"],
+    );
+    expect(res).toMatchObject({ isError: true, content: [{ text: AGENT_ERRORS.routine }] });
+    expect(stored(ROUTINE_DAY)).toMatchObject({ content: ROUTINE_DAY, agentState: null });
+  });
+
+  it("keeps an agent-only connection from queueing work for itself", async () => {
+    const created = await call("create_task", { content: "Self-assigned", handToAgent: true }, ["tasks:agent"]);
+    expect(created.isError).toBe(true);
+    const updated = await call("update_task", { id: PERSONAL, handToAgent: true }, ["tasks:agent"]);
+    expect(updated.isError).toBe(true);
+    expect(stored(PERSONAL).agentState).toBeNull();
+    expect(db.tasks.some((t) => t.content === "Self-assigned")).toBe(false);
   });
 
   it("lets a full-access connection use the hand-off too", async () => {

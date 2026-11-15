@@ -53,12 +53,24 @@ until the user hands them over.
   its question or report. A `done` task leaves the list when the user completes it, or replies: the reply is logged
   as an answer and the task returns to `ready`, so the next claim reads it. "Take back" also
   clears it. Re-opening a completed `done` task lists it again.
+- **AT9: A full-access connection can hand a task over (issue #76).** `create_task` and
+  `update_task` take an optional `handToAgent: true`, so an assistant the user talks to can queue
+  work on the user's word instead of the user tapping "Hand to AI agent". It runs the same
+  transition as the button (AT1): a personal, `suggested` or `done` task becomes `ready`; a
+  `working` or `needs_input` one is left as it is; a routine day is refused, and `update_task`
+  checks that before changing any field. Only `true` is accepted, so the connector cannot set any
+  other state. Both tools need `tasks:write`, so an agent-only connection (AT7) still cannot queue
+  work for itself; it can only suggest. When the connector actually moves the task, the log gets
+  one `progress` entry by `agent`, "Handed to the agent through the connector." A hand-off from
+  the app logs nothing, so the log shows which ones came from a connection. The tool count stays
+  at 26.
 
 ## 3. Tools
 
 | Tool | Scope | Does |
 |---|---|---|
 | `list_tasks` | read | now also filters by `agentState` and `projectId` |
+| `create_task`, `update_task` | write | `handToAgent: true` puts the task in the queue (AT9) |
 | `get_task` | read | one task with its log |
 | `claim_task` | agent | claim a task by id, or the next ready one by priority, deadline, planned date |
 | `log_task_progress` | agent | add a progress note, renew the lease |
